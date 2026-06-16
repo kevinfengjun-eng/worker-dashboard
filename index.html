@@ -1,0 +1,1379 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>临时工管理指标看板</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB',sans-serif;background:#F1F5F9;color:#1E293B;font-size:13px;line-height:1.5}
+
+/* ===== LOGIN ===== */
+#loginOverlay{position:fixed;inset:0;z-index:9999;background:linear-gradient(135deg,#1E3A5F 0%,#0F2044 100%);display:flex;align-items:center;justify-content:center}
+.login-card{background:#fff;border-radius:16px;padding:40px 36px;width:340px;box-shadow:0 20px 60px rgba(0,0,0,.3);text-align:center}
+.login-card h2{font-size:20px;color:#0F2044;margin-bottom:4px}
+.login-card p{font-size:12px;color:#94A3B8;margin-bottom:24px}
+.login-card input{width:100%;padding:10px 14px;margin-bottom:14px;border:1px solid #CBD5E1;border-radius:8px;font-size:14px;outline:none;transition:border .15s}
+.login-card input:focus{border-color:#3B82F6;box-shadow:0 0 0 3px rgba(59,130,246,.15)}
+.login-card button{width:100%;padding:10px;border:none;border-radius:8px;background:#3B82F6;color:#fff;font-size:14px;font-weight:600;cursor:pointer;transition:background .15s}
+.login-card button:hover{background:#2563EB}
+.login-error{color:#EF4444;font-size:12px;margin-bottom:10px;display:none}
+.login-hint{font-size:11px;color:#CBD5E1;margin-top:16px}
+.container{max-width:1200px;margin:0 auto;padding:16px 20px}
+
+/* ===== HEADER ===== */
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #E2E8F0}
+h1{font-size:17px;font-weight:700;color:#0F172A}
+.header-sub{font-size:11px;color:#94A3B8;margin-top:2px}
+.header-right{display:flex;align-items:center;gap:8px;font-size:12px;color:#64748B}
+.btn{padding:5px 12px;border-radius:6px;border:1px solid #CBD5E1;background:#fff;font-size:12px;cursor:pointer;color:#475569;transition:all .15s}
+.btn:hover{background:#F8FAFC;border-color:#94A3B8}
+.btn-primary{background:#3B82F6;color:#fff;border-color:#3B82F6}
+.btn-primary:hover{background:#2563EB}
+.btn-outline{background:transparent;color:#94A3B8;border-color:#E2E8F0}
+.btn-outline:hover{background:#F1F5F9;color:#475569}
+input[type="date"],input[type="number"]{padding:4px 8px;border:1px solid #CBD5E1;border-radius:6px;font-size:12px;font-family:inherit}
+input:focus{outline:2px solid #3B82F6;outline-offset:1px}
+
+/* ===== TABS ===== */
+.tabs{display:flex;gap:0;border-bottom:2px solid #E2E8F0;margin-bottom:16px}
+.tab{padding:7px 18px;font-size:13px;font-weight:500;color:#64748B;cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;margin-bottom:-2px;transition:color .15s}
+.tab:hover{color:#3B82F6}
+.tab.active{color:#3B82F6;border-bottom-color:#3B82F6}
+.tab-panel{display:none}.tab-panel.active{display:block}
+
+/* ===== BADGES ===== */
+.badge{display:inline-block;padding:1px 7px;border-radius:4px;font-size:10px;font-weight:600;margin-left:5px;vertical-align:middle}
+.badge-real{background:#D1FAE5;color:#065F46}
+.badge-editable{background:#DBEAFE;color:#1E40AF;font-size:9px;padding:1px 5px;margin-left:4px;cursor:help}
+
+/* ===== KPI CARDS ===== */
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px}
+.kpi-card{background:#fff;border-radius:10px;padding:14px 16px;border:1px solid #E2E8F0;position:relative}
+.kpi-period{font-size:10px;color:#94A3B8;margin-bottom:2px;font-weight:400}
+.kpi-label{font-size:12px;color:#64748B;margin-bottom:4px}
+.kpi-value{font-size:26px;font-weight:700;color:#0F172A}
+.kpi-sub{font-size:11px;color:#94A3B8;margin-top:4px}
+.kpi-change{font-size:11px;margin-top:2px;display:flex;align-items:center;gap:3px}
+.kpi-change.up{color:#22C55E}.kpi-change.down{color:#EF4444}.kpi-change.flat{color:#94A3B8}
+
+/* ===== SECONDARY ROW ===== */
+.sec-row{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px}
+.sec-card{background:#fff;border-radius:8px;padding:10px 14px;border:1px solid #E2E8F0;display:flex;align-items:center;gap:10px}
+.sec-icon{width:32px;height:32px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.ic-blue{background:#EFF6FF;color:#3B82F6}
+.ic-green{background:#F0FDF4;color:#22C55E}
+.ic-amber{background:#FFFBEB;color:#F59E0B}
+.ic-red{background:#FEF2F2;color:#EF4444}
+.ic-purple{background:#F5F3FF;color:#7C3AED}
+.sec-num{font-size:18px;font-weight:700}.sec-label{font-size:10px;color:#64748B}
+
+/* ===== CARD ===== */
+.card{background:#fff;border-radius:10px;padding:16px;border:1px solid #E2E8F0;margin-bottom:14px}
+.card-title{font-size:13px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
+.card-title-left{display:flex;align-items:center;gap:6px}
+.card-subtitle{font-size:10px;color:#94A3B8;font-weight:400}
+
+/* ===== PROGRESS ===== */
+.progress-row{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+.progress-label{width:40px;font-size:13px;font-weight:600;flex-shrink:0}
+.progress-wrap{flex:1;display:flex;flex-direction:column;gap:4px}
+.progress-bar-outer{height:20px;background:#F1F5F9;border-radius:10px;overflow:hidden;position:relative}
+.progress-bar-inner{height:100%;border-radius:10px;transition:width .4s ease;min-width:2px}
+.bar-green{background:#22C55E}.bar-amber{background:#F59E0B}.bar-red{background:#EF4444}
+.progress-pct{position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:10px;font-weight:600;color:#475569}
+.progress-detail{display:flex;gap:16px;font-size:11px;color:#64748B;flex-wrap:wrap;align-items:center}
+.progress-detail b{color:#1E293B;font-weight:600}
+.target-input{width:80px;padding:3px 6px;border:1px solid #CBD5E1;border-radius:4px;font-size:13px;text-align:center;background:#F0FDF4;border-color:#86EFAC;font-weight:600}
+.target-date-input{padding:3px 8px;border:1px solid #CBD5E1;border-radius:4px;font-size:12px;background:#F0FDF4;border-color:#86EFAC;color:#1E293B}
+.progress-detail .tag{display:inline-block;padding:1px 8px;border-radius:10px;font-size:10px;font-weight:600}
+.tag-active{background:#EFF6FF;color:#3B82F6}
+.tag-gap{background:#FEF2F2;color:#EF4444}
+.tag-ok{background:#F0FDF4;color:#22C55E}
+
+/* ===== TABLE ===== */
+.table-scroll{overflow-x:auto;border-radius:8px;border:1px solid #E2E8F0}
+table.dt{width:100%;border-collapse:collapse;font-size:11px;white-space:nowrap}
+table.dt th{background:#F8FAFC;font-weight:600;text-align:center;padding:6px 7px;border:1px solid #E2E8F0;position:sticky;top:0}
+table.dt td{padding:4px 7px;border:1px solid #E2E8F0;text-align:center}
+table.dt .rh{font-weight:500;text-align:left;background:#F8FAFC;min-width:56px}
+table.dt .sub{background:#F0FDF4;font-weight:500}
+table.dt .tot{background:#EFF6FF;font-weight:600}
+.c-pos{color:#22C55E;font-weight:500}.c-neg{color:#EF4444;font-weight:500}
+
+/* ===== OVERVIEW LAYOUT ===== */
+.overview-mid{display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:14px}
+.funnel-card{background:#fff;border-radius:10px;padding:16px;border:1px solid #E2E8F0}
+.funnel-item{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.funnel-bar-wrap{flex:1}
+.funnel-bar-outer{height:22px;background:#F1F5F9;border-radius:11px;overflow:hidden}
+.funnel-bar-inner{height:100%;border-radius:11px;display:flex;align-items:center;justify-content:flex-end;padding-right:8px;font-size:10px;font-weight:600;color:#fff}
+.funnel-label{width:60px;font-size:12px;font-weight:500;color:#475569;text-align:right}
+.funnel-num{width:60px;font-size:16px;font-weight:700;text-align:right}
+.funnel-pct{font-size:10px;color:#94A3B8;margin-top:1px;text-align:right}
+.target-line-input{width:56px;padding:2px 6px;border:1px solid #86EFAC;border-radius:4px;font-size:12px;text-align:center;background:#F0FDF4}
+.chart-box{position:relative;width:100%;margin-bottom:14px}
+.chart-box.tall{height:280px}
+.chart-box.medium{height:240px}
+.chart-box.short{height:200px}
+.chart-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.chart-full{margin-bottom:14px}
+.controls{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
+.controls .btn.active{background:#3B82F6;color:#fff;border-color:#3B82F6}
+
+/* ===== SKILL TABLE ===== */
+.skill-table{width:100%;border-collapse:collapse;font-size:11px}
+.skill-table th{background:#F8FAFC;font-weight:600;text-align:center;padding:6px;border:1px solid #E2E8F0}
+.skill-table td{padding:5px 7px;border:1px solid #E2E8F0;text-align:center}
+.skill-table .rh{text-align:left;font-weight:500;background:#F8FAFC}
+.urg-high{color:#EF4444;font-weight:600}.urg-mid{color:#F59E0B;font-weight:500}.urg-low{color:#22C55E;font-weight:500}
+.demand-input{width:48px;padding:2px 4px;border:1px solid #CBD5E1;border-radius:4px;font-size:12px;text-align:center;background:#F0FDF4;border-color:#86EFAC}
+.sk-dagong{background:#FFF7ED}.sk-zhonggong{background:#F0F9FF}.sk-xiaogong{background:#F0FDF4}
+
+/* ===== TOAST ===== */
+.toast{position:fixed;top:16px;right:16px;padding:8px 16px;border-radius:8px;font-size:12px;font-weight:500;z-index:1000;display:none}
+.toast-success{background:#D1FAE5;color:#065F46;border:1px solid #A7F3D0}
+.toast-error{background:#FEE2E2;color:#991B1B;border:1px solid #FECACA}
+
+/* ===== REFERENCE PAGE ===== */
+.ref-section{margin-bottom:20px}
+.ref-section h3{font-size:14px;font-weight:600;color:#0F172A;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid #E2E8F0}
+.ref-table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:12px}
+.ref-table th{background:#F8FAFC;font-weight:600;text-align:left;padding:8px 10px;border:1px solid #E2E8F0;color:#475569;width:140px}
+.ref-table td{padding:8px 10px;border:1px solid #E2E8F0;color:#1E293B;line-height:1.6}
+.ref-table td code{background:#F1F5F9;padding:1px 5px;border-radius:3px;font-size:11px;color:#7C3AED}
+.ref-tag{display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:500}
+.tag-kpi{background:#DBEAFE;color:#1E40AF}
+.tag-formula{background:#FEF3C7;color:#92400E}
+.tag-edit{background:#D1FAE5;color:#065F46}
+.ref-tip{background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400E;margin-top:8px;line-height:1.7}
+.ref-tip b{color:#78350F}
+
+@media (max-width:768px){
+  .kpi-row{grid-template-columns:repeat(2,1fr)!important;gap:8px}
+  .overview-mid{grid-template-columns:1fr!important}
+  .sec-row{grid-template-columns:repeat(3,1fr)!important;gap:6px}
+  .chart-row{grid-template-columns:1fr!important}
+  .container{padding:10px 12px}
+  header{flex-direction:column;gap:8px;align-items:flex-start}
+  .header-right{flex-wrap:wrap}
+  .tabs{overflow-x:auto;flex-wrap:nowrap}
+  .tab{font-size:12px;padding:6px 12px}
+  .kpi-value{font-size:20px!important}
+  .card{padding:12px 10px}
+  .card-title{font-size:12px}
+  table.dt{font-size:10px}
+  table.dt th,table.dt td{padding:3px 4px}
+  .funnel-label{width:48px;font-size:11px}
+  .funnel-num{font-size:14px}
+  .ref-table{font-size:11px}
+}
+@media (max-width:480px){
+  .kpi-row{grid-template-columns:1fr!important}
+  .sec-row{grid-template-columns:repeat(2,1fr)!important}
+}
+</style>
+<script>
+// ===== 登录鉴权 =====
+const ACCOUNTS={admin:{pass:'hyms2026',role:'admin'},'111':{pass:'111',role:'viewer'}};
+let CURRENT_ROLE='';
+function doLogin(){
+  const u=$('#loginUser').value, p=$('#loginPass').value;
+  const acc=ACCOUNTS[u];
+  if(acc && acc.pass===p){
+    CURRENT_ROLE=acc.role;
+    $('#loginOverlay').style.display='none';
+    $('#mainApp').style.display='block';
+    applyRoleRestriction();
+    init();
+  } else {
+    $('#loginErr').style.display='block';
+    setTimeout(()=>$('#loginErr').style.display='none',2000);
+  }
+}
+function applyRoleRestriction(){
+  if(CURRENT_ROLE!=='admin'){
+    // 普通用户：隐藏上传按钮，禁用所有可编辑输入
+    const loadBtn=document.querySelector('button[onclick*="fileInput"]');
+    if(loadBtn)loadBtn.style.display='none';
+    const fileInput=$('#fileInput'); if(fileInput)fileInput.remove();
+    document.querySelectorAll('input[type="number"][onchange],input[type="number"][data-region],input[type="number"][data-skill]').forEach(el=>{
+      el.readOnly=true;el.style.background='#F1F5F9';el.style.borderColor='#E2E8F0';el.style.cursor='default';
+    });
+    document.querySelectorAll('.badge-editable').forEach(el=>el.style.display='none');
+  }
+}
+// 回车登录
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&$('#loginOverlay').style.display!=='none')doLogin()});
+// 页面加载时隐藏主应用
+window.addEventListener('DOMContentLoaded',()=>{$('#mainApp').style.display='none'});
+</script>
+</head>
+<body>
+<!-- 登录遮罩 -->
+<div id="loginOverlay">
+<div class="login-card">
+<h2>临时工管理看板</h2>
+<p>请输入账号密码登录</p>
+<input autofocus="" id="loginUser" placeholder="账号" type="text"/>
+<input id="loginPass" placeholder="密码" type="password"/>
+<div class="login-error" id="loginErr">账号或密码错误</div>
+<button onclick="doLogin()">登 录</button>
+</div>
+</div>
+<!-- 主应用（登录后显示） -->
+<div id="mainApp">
+<div class="container">
+<header>
+<div>
+<h1>临时工管理指标看板</h1>
+<p class="header-sub" id="headerSub">请上传台账数据</p>
+</div>
+<div class="header-right">
+<span style="font-size:11px;color:#94A3B8">截止</span>
+<input id="reportDate" onchange="onDateChange()" type="date"/>
+<button class="btn" onclick="document.getElementById('fileInput').click()">加载真实数据</button>
+<button class="btn btn-outline" onclick="init(true)" title="清除缓存数据，重新上传">清除缓存</button>
+<input accept=".xlsx,.xls" id="fileInput" onchange="onFileSelected(event)" style="display:none" type="file"/>
+</div>
+</header>
+<div class="tabs">
+<button class="tab active" onclick="switchTab('overview')">概览</button>
+<button class="tab" onclick="switchTab('target')">目标</button>
+<button class="tab" onclick="switchTab('trend')">趋势</button>
+<button class="tab" onclick="switchTab('structure')">结构</button>
+<button class="tab" onclick="switchTab('reference')">指标说明</button>
+</div>
+<!-- ==================== 概览 ==================== -->
+<section class="tab-panel active" id="panel-overview">
+<!-- 板块一：在职人数概览 -->
+<div class="kpi-row" id="overviewKPI" style="grid-template-columns:repeat(3,1fr)"></div>
+<!-- 副指标卡片 -->
+<div class="sec-row" id="overviewSecondary"></div>
+<!-- 板块二：用工结构明细 -->
+<div class="card">
+<div class="card-title"><span class="card-title-left">用工结构明细</span><span class="card-subtitle">当前在职 · 按岗位和技能等级</span></div>
+<div class="table-scroll" id="overviewStructure"></div>
+</div>
+<!-- 板块三 + 五 -->
+<div class="overview-mid">
+
+<div class="funnel-card">
+<div class="card-title"><span class="card-title-left">招聘漏斗</span><span class="card-subtitle">累计</span></div>
+<div id="funnelMetrics"></div>
+</div>
+</div>
+<!-- 板块四：30日净增趋势 -->
+
+</section>
+<!-- ==================== 目标 ==================== -->
+<section class="tab-panel" id="panel-target">
+<div class="card">
+<div class="card-title">
+<span class="card-title-left">总目标达成进度 <span class="badge badge-editable" title="目标值可直接修改">可调</span></span>
+<div class="controls" style="margin-left:auto">
+<span style="font-size:11px;color:#64748B">目标开始时间</span>
+<input type="date" class="target-date-input" id="targetStartDate" oninput="renderTargets()" value="2026-06-01"/>
+</div>
+</div>
+<div class="progress-section" id="progressSection"></div>
+</div><div class="card">
+<div class="card-title"><span class="card-title-left">入离净明细</span><span style="margin-left:auto;display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:#64748B">起始</span><input type="date" class="target-date-input" id="ov7dStartDate" oninput="renderOverview7d()"/><span style="font-size:11px;color:#94A3B8">~</span><span style="font-size:11px;color:#64748B">结束</span><input type="date" class="target-date-input" id="ov7dEndDate" oninput="renderOverview7d()"/><button class="btn" id="btnToggle7d" onclick="toggle7dDaily()" style="font-size:11px;padding:3px 10px">显示每日明细</button></span></div>
+<div class="table-scroll" id="overview7d"></div>
+</div><div class="card">
+<div class="card-title">
+<span class="card-title-left">净增趋势</span>
+<div class="controls">
+<span style="font-size:11px;color:#64748B">起始</span>
+<input type="date" class="target-date-input" id="ovTrendStartDate" oninput="renderOverviewTrend()"/>
+<span style="font-size:11px;color:#94A3B8;margin-left:6px">~</span>
+<span style="font-size:11px;color:#64748B">结束</span>
+<input type="date" class="target-date-input" id="ovTrendEndDate" oninput="renderOverviewTrend()"/>
+<span style="font-size:11px;color:#64748B;margin-left:10px">日目标线</span>
+<input class="target-line-input" id="ovTargetLine" onchange="renderOverviewTrend()" type="number" value="55"/>
+<span style="font-size:11px;color:#64748B">人</span>
+<span class="badge badge-editable">可调</span>
+</div>
+</div>
+<div class="chart-box tall"><canvas id="ovTrendChart"></canvas></div>
+</div>
+
+
+</section>
+<!-- ==================== 趋势 ==================== -->
+<section class="tab-panel" id="panel-trend">
+<div class="card">
+<div class="card-title">
+<span class="card-title-left">日净增趋势</span>
+<div class="controls" id="trendControls"></div>
+</div>
+<div class="chart-box tall"><canvas id="trendChart"></canvas></div>
+</div>
+<div class="card">
+<div class="card-title"><span class="card-title-left">岗位在职人数趋势</span></div>
+<div class="chart-box medium"><canvas id="jobAreaChart"></canvas></div>
+</div>
+</section>
+<!-- ==================== 结构 ==================== -->
+<section class="tab-panel" id="panel-structure">
+<div class="chart-row">
+<div class="card">
+<div class="card-title"><span class="card-title-left">岗位分布</span></div>
+<div class="chart-box short"><canvas id="jobPieChart"></canvas></div>
+</div>
+<div class="card">
+<div class="card-title"><span class="card-title-left">供应商在职占比</span></div>
+<div class="chart-box short"><canvas id="supplierChart"></canvas></div>
+</div>
+</div>
+<div class="card">
+<div class="card-title">
+<span class="card-title-left">技能等级供需分析</span>
+<span class="card-subtitle">需求数可直接修改 <span class="badge badge-editable">可调</span></span>
+</div>
+<div class="table-scroll" id="skillTableWrap"></div>
+</div>
+</section>
+<!-- ==================== 指标说明（动态渲染） ==================== -->
+<section class="tab-panel" id="panel-reference">
+<div class="card" id="referenceContent"></div>
+</section>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+// ==================== DATA ====================
+const COLORS = {
+  jm:'#3B82F6', cd:'#22C55E',
+  join:'#3B82F6', leave:'#EF4444', net:'#F59E0B',
+  jobs:['#F59E0B','#3B82F6','#8B5CF6','#EC4899','#6B7280'],
+  jobNames:['电工','钳工','调试','仓库','其他'],
+  suppliers:['#3B82F6','#22C55E','#F59E0B'],
+  supplierNames:['001','002','003'],
+  skills:['大工','中工','小工'],
+  regions:['江门','成都']
+};
+
+let DATA = {};
+
+
+// ===== EMBEDDED DATA (预嵌入真实数据) =====
+const EMBEDDED_DATA = {"reportDate":"2026-06-15","periodStart":"2026-06-01","_isRealData":true,"targets":{"江门":2500,"成都":900},"skillDemand":{"大工":450,"中工":1500,"小工":2000},"snapshot":{"totalActive":176,"jmActive":88,"cdActive":88,"jmJobs":{"电工":53,"钳工":35,"调试":0,"仓库":0,"其他":0},"cdJobs":{"电工":53,"钳工":35,"调试":0,"仓库":0,"其他":0},"jmSkills":{"大工":38,"中工":38,"小工":12},"cdSkills":{"大工":34,"中工":43,"小工":11},"jmJobSkills":{"电工":{"大工":19,"中工":27,"小工":7},"钳工":{"大工":19,"中工":11,"小工":5},"调试":{"大工":0,"中工":0,"小工":0},"仓库":{"大工":0,"中工":0,"小工":0},"其他":{"大工":0,"中工":0,"小工":0}},"cdJobSkills":{"电工":{"大工":13,"中工":30,"小工":10},"钳工":{"大工":21,"中工":13,"小工":1},"调试":{"大工":0,"中工":0,"小工":0},"仓库":{"大工":0,"中工":0,"小工":0},"其他":{"大工":0,"中工":0,"小工":0}},"skills":{"大工":72,"中工":81,"小工":23},"supplierCount":{"久久鸿":30,"聘得宝":21,"技为":17,"共辉":16,"奕晨":16,"众智":11,"赞华":10,"科为":9,"华伟":8,"慧通":6,"智邦":6,"淘金":6,"薪向往":5,"杰威":3,"伟辉":2},"topSuppliers":["久久鸿","聘得宝","技为","共辉","奕晨","众智","赞华","科为","华伟","慧通","智邦","淘金","薪向往","杰威","伟辉"],"supplierNames":["久久鸿","聘得宝","技为","共辉","奕晨","众智","赞华","科为","华伟","慧通","智邦","淘金","薪向往","杰威","伟辉"],"interviewTotal":189,"interviewPass":182,"reportCount":182},"weekly":{"jmJoin":0,"jmLeave":2,"cdJoin":0,"cdLeave":0},"monthly":{"jmJoin":88,"jmLeave":4,"cdJoin":88,"cdLeave":2},"prevWeekActive":178,"prevWeekJmActive":90,"prevWeekCdActive":88,"daily":[{"date":"06-01","dateObj_ts":1780243200000,"jm_j":25,"jm_l":0,"jm_n":25,"cd_j":23,"cd_l":0,"cd_n":23,"cumJm":25,"cumCd":23,"jobs_jm":[11,14,0,0,0],"jobs_cd":[13,10,0,0,0]},{"date":"06-02","dateObj_ts":1780329600000,"jm_j":25,"jm_l":0,"jm_n":25,"cd_j":29,"cd_l":0,"cd_n":29,"cumJm":50,"cumCd":52,"jobs_jm":[12,13,0,0,0],"jobs_cd":[16,13,0,0,0]},{"date":"06-03","dateObj_ts":1780416000000,"jm_j":38,"jm_l":0,"jm_n":38,"cd_j":36,"cd_l":0,"cd_n":36,"cumJm":88,"cumCd":88,"jobs_jm":[30,8,0,0,0],"jobs_cd":[24,12,0,0,0]},{"date":"06-04","dateObj_ts":1780502400000,"jm_j":0,"jm_l":0,"jm_n":0,"cd_j":0,"cd_l":0,"cd_n":0,"cumJm":88,"cumCd":88,"jobs_jm":[0,0,0,0,0],"jobs_cd":[0,0,0,0,0]},{"date":"06-05","dateObj_ts":1780588800000,"jm_j":0,"jm_l":1,"jm_n":-1,"cd_j":0,"cd_l":0,"cd_n":0,"cumJm":87,"cumCd":88,"jobs_jm":[0,0,0,0,0],"jobs_cd":[0,0,0,0,0]},{"date":"06-06","dateObj_ts":1780675200000,"jm_j":0,"jm_l":0,"jm_n":0,"cd_j":0,"cd_l":1,"cd_n":-1,"cumJm":87,"cumCd":87,"jobs_jm":[0,0,0,0,0],"jobs_cd":[0,0,0,0,0]},{"date":"06-07","dateObj_ts":1780761600000,"jm_j":0,"jm_l":0,"jm_n":0,"cd_j":0,"cd_l":1,"cd_n":-1,"cumJm":87,"cumCd":86,"jobs_jm":[0,0,0,0,0],"jobs_cd":[0,0,0,0,0]},{"date":"06-08","dateObj_ts":1780848000000,"jm_j":0,"jm_l":1,"jm_n":-1,"cd_j":0,"cd_l":0,"cd_n":0,"cumJm":86,"cumCd":86,"jobs_jm":[0,0,0,0,0],"jobs_cd":[0,0,0,0,0]},{"date":"06-09","dateObj_ts":1780934400000,"jm_j":0,"jm_l":1,"jm_n":-1,"cd_j":0,"cd_l":0,"cd_n":0,"cumJm":85,"cumCd":86,"jobs_jm":[0,0,0,0,0],"jobs_cd":[0,0,0,0,0]},{"date":"06-10","dateObj_ts":1781020800000,"jm_j":0,"jm_l":1,"jm_n":-1,"cd_j":0,"cd_l":0,"cd_n":0,"cumJm":84,"cumCd":86,"jobs_jm":[0,0,0,0,0],"jobs_cd":[0,0,0,0,0]},{"date":"06-11","dateObj_ts":1781107200000,"jm_j":0,"jm_l":0,"jm_n":0,"cd_j":0,"cd_l":0,"cd_n":0,"cumJm":84,"cumCd":86,"jobs_jm":[0,0,0,0,0],"jobs_cd":[0,0,0,0,0]},{"date":"06-12","dateObj_ts":1781193600000,"jm_j":0,"jm_l":0,"jm_n":0,"cd_j":0,"cd_l":0,"cd_n":0,"cumJm":84,"cumCd":86,"jobs_jm":[0,0,0,0,0],"jobs_cd":[0,0,0,0,0]},{"date":"06-13","dateObj_ts":1781280000000,"jm_j":0,"jm_l":0,"jm_n":0,"cd_j":0,"cd_l":0,"cd_n":0,"cumJm":84,"cumCd":86,"jobs_jm":[0,0,0,0,0],"jobs_cd":[0,0,0,0,0]},{"date":"06-14","dateObj_ts":1781366400000,"jm_j":0,"jm_l":0,"jm_n":0,"cd_j":0,"cd_l":0,"cd_n":0,"cumJm":84,"cumCd":86,"jobs_jm":[0,0,0,0,0],"jobs_cd":[0,0,0,0,0]},{"date":"06-15","dateObj_ts":1781452800000,"jm_j":0,"jm_l":0,"jm_n":0,"cd_j":0,"cd_l":0,"cd_n":0,"cumJm":84,"cumCd":86,"jobs_jm":[0,0,0,0,0],"jobs_cd":[0,0,0,0,0]}]};
+
+// Override init: use embedded data, skip login for viewer mode
+function initWithEmbeddedData(){
+  destroyAllCharts();
+  // Restore dateObj from timestamps
+  if(EMBEDDED_DATA.daily){
+    EMBEDDED_DATA.daily.forEach(d=>{
+      if(d.dateObj_ts) d.dateObj = new Date(d.dateObj_ts);
+      delete d.dateObj_ts;
+    });
+  }
+  // Copy to DATA
+  Object.assign(DATA, JSON.parse(JSON.stringify(EMBEDDED_DATA)));
+  DATA._isRealData = true;
+
+  // Update COLORS with dynamic supplier info
+  if(DATA.snapshot.topSuppliers){
+    COLORS.supplierNames = DATA.snapshot.topSuppliers;
+    const palette=['#3B82F6','#22C55E','#F59E0B','#8B5CF6','#EC4899','#14B8A6','#F97316','#6366F1','#EF4444','#84CC16','#06B6D4','#D946EF','#0EA5E9','#A855F7','#F43F5E'];
+    COLORS.suppliers = DATA.snapshot.topSuppliers.map((_,i)=>palette[i%palette.length]);
+  }
+
+  ensureDefaults();
+  $('#headerSub').innerHTML = '真实数据（预嵌入） · 报告周期：' + DATA.periodStart + ' ~ ' + DATA.reportDate;
+  $('#reportDate').value = DATA.reportDate;
+  setupDatePickers();
+  initTrendControls();
+  renderOverviewTab();
+  _renderedTabs.add('overview');
+}
+
+// Skip login for embedded version - auto-login as viewer
+function doLogin(){
+  CURRENT_ROLE = 'viewer';
+  $('#loginOverlay').style.display = 'none';
+  $('#mainApp').style.display = 'block';
+  applyRoleRestriction();
+  initWithEmbeddedData();
+}
+
+// Auto-login on page load
+window.addEventListener('DOMContentLoaded', function(){
+  setTimeout(function(){
+    $('#loginOverlay').style.display = 'none';
+    $('#mainApp').style.display = 'block';
+    applyRoleRestriction();
+    initWithEmbeddedData();
+  }, 100);
+});
+
+
+// ==================== UTILS ====================
+const $=s=>document.querySelector(s);
+const $$=s=>document.querySelectorAll(s);
+function fmt(n){return n==null?'-':n.toLocaleString()}
+function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v))}
+// 统一日期全格式：始终从dateObj生成YYYY-MM-DD，避免硬编码年份
+function getFullDate(d){
+  if(!d)return'';
+  const o=d.dateObj||d;
+  if(o instanceof Date&&!isNaN(o))return fmtDate(o);
+  if(typeof o==='string'){
+    const p=o.split('-');
+    if(p.length===3)return o;
+    if(p.length===2){
+      // MM-DD格式，需要年份——从dateObj取
+      if(d.dateObj&&d.dateObj instanceof Date&&!isNaN(d.dateObj))return fmtDate(d.dateObj);
+      // 兜底：用当前年份
+      return new Date().getFullYear()+'-'+o;
+    }
+  }
+  return '';
+}
+// ==================== TOAST ====================
+function showToast(msg,type='success'){
+  const t=$('#toast');t.textContent=msg;t.className='toast toast-'+type;t.style.display='block';
+  setTimeout(()=>t.style.display='none',3000)
+}
+
+// ==================== TABS ====================
+let _renderedTabs = new Set();
+function switchTab(id){
+  $$('.tab').forEach(t=>{t.classList.toggle('active',t.textContent.includes(
+    {overview:'概览',target:'目标',trend:'趋势',structure:'结构',reference:'指标说明'}[id]))});
+  $$('.tab-panel').forEach(p=>p.classList.remove('active'));
+  $(`#panel-${id}`).classList.add('active');
+  // 延迟渲染当前tab的图表（确保tab已visible，canvas有正确尺寸）
+  setTimeout(()=>{
+    if(id==='overview'||id==='target') renderOverviewTab();
+    else if(id==='trend') renderTrendTab();
+    else if(id==='structure') renderStructureTab();
+    else if(id==='reference') renderReference();
+    // 目标面板的图表需要单独渲染
+    if(id==='target'){ renderOverview7d(); renderOverviewTrend(); }
+    _renderedTabs.add(id);
+  }, 60);
+}
+
+// ==================== OVERVIEW ====================
+function renderOverviewKPI(){
+  const s=DATA.snapshot;
+  const totalWow=s.totalActive-DATA.prevWeekActive;
+  const jmWow=s.jmActive-(DATA.prevWeekJmActive||s.jmActive);
+  const cdWow=s.cdActive-(DATA.prevWeekCdActive||s.cdActive);
+  function wowHtml(v){return v>=0?`<span class="kpi-change up">较上周 +${fmt(v)}</span>`:`<span class="kpi-change down">较上周 ${fmt(v)}</span>`}
+  $('#overviewKPI').innerHTML=[
+    `<div class="kpi-card"><div class="kpi-period">实时快照</div><div class="kpi-label">总在职人数</div><div class="kpi-value">${fmt(s.totalActive)}</div>${wowHtml(totalWow)}</div>`,
+    `<div class="kpi-card"><div class="kpi-period">实时快照</div><div class="kpi-label">江门在职</div><div class="kpi-value" style="color:#3B82F6">${fmt(s.jmActive)}</div>${wowHtml(jmWow)}</div>`,
+    `<div class="kpi-card"><div class="kpi-period">实时快照</div><div class="kpi-label">成都在职</div><div class="kpi-value" style="color:#22C55E">${fmt(s.cdActive)}</div>${wowHtml(cdWow)}</div>`
+  ].join('')
+}
+
+function renderOverviewStructure(){
+  const jobs=COLORS.jobNames, skills=COLORS.skills;
+  const s=DATA.snapshot;
+  const jmJS=s.jmJobSkills||{}, cdJS=s.cdJobSkills||{};
+
+  // 第一遍：算总计
+  let grandJm=0, grandCd=0, grandTotal=0;
+  const jobData={};
+  jobs.forEach(j=>{
+    let jobJm=0, jobCd=0;
+    skills.forEach(sk=>{jobJm+=(jmJS[j]||{})[sk]||0; jobCd+=(cdJS[j]||{})[sk]||0});
+    jobData[j]={jobJm,jobCd,jobTotal:jobJm+jobCd};
+    grandJm+=jobJm; grandCd+=jobCd; grandTotal+=jobJm+jobCd;
+  });
+
+  let html='<table class="dt"><thead><tr><th class="rh">岗位</th><th>技能等级</th><th>江门</th><th>成都</th><th>总计</th><th>岗位占比</th><th>等级占比(江门)</th><th>等级占比(成都)</th></tr></thead><tbody>';
+
+  jobs.forEach(j=>{
+    const {jobJm,jobCd,jobTotal}=jobData[j];
+    const jobPct=grandTotal?(jobTotal/grandTotal*100).toFixed(1):'0.0';
+    const rows=skills.map((sk,si)=>({
+      sk,jv:(jmJS[j]||{})[sk]||0,cv:(cdJS[j]||{})[sk]||0,
+      cls:si===0?'sk-dagong':si===1?'sk-zhonggong':'sk-xiaogong'
+    }));
+    const totalRows=rows.length;
+    rows.forEach((r,ri)=>{
+      const jmPct=jobJm?(r.jv/jobJm*100).toFixed(1):'-';
+      const cdPct=jobCd?(r.cv/jobCd*100).toFixed(1):'-';
+      if(ri===0){
+        html+=`<tr><td class="rh" rowspan="${totalRows}" style="font-weight:600">${j}</td>`+
+          `<td class="rh" style="font-weight:400">${r.sk}</td>`+
+          `<td>${fmt(r.jv)}</td><td>${fmt(r.cv)}</td><td>${fmt(r.jv+r.cv)}</td>`+
+          `<td rowspan="${totalRows}" style="vertical-align:middle;font-weight:600;color:#3B82F6">${jobPct}%</td>`+
+          `<td>${jmPct}%</td><td>${cdPct}%</td></tr>`;
+      } else {
+        html+=`<tr class="${r.cls}"><td class="rh" style="font-weight:400">${r.sk}</td>`+
+          `<td>${fmt(r.jv)}</td><td>${fmt(r.cv)}</td><td>${fmt(r.jv+r.cv)}</td>`+
+          `<td>${jmPct}%</td><td>${cdPct}%</td></tr>`;
+      }
+    });
+    html+=`<tr class="sub"><td></td><td class="rh">小计</td><td><b>${fmt(jobJm)}</b></td>`+
+      `<td><b>${fmt(jobCd)}</b></td><td><b>${fmt(jobTotal)}</b></td>`+
+      `<td><b>${jobPct}%</b></td><td></td><td></td></tr>`;
+  });
+  html+=`<tr class="tot"><td class="rh">合计</td><td></td><td><b>${fmt(grandJm)}</b></td>`+
+    `<td><b>${fmt(grandCd)}</b></td><td><b>${fmt(grandTotal)}</b></td>`+
+    `<td>100%</td><td></td><td></td></tr>`;
+  html+='</tbody></table>';
+  $('#overviewStructure').innerHTML=html;
+}
+
+let ov7dShowDaily=false;
+function renderOverview7d(){
+  const daily=DATA.daily;
+  // 起始日期 = 用户选择（默认最近周一）
+  const startDateStr=$('#ov7dStartDate')?.value||'';
+  // 结束日期 = 用户选择（默认最近日期）
+  const endDateStr=$('#ov7dEndDate')?.value||'';
+  // 根据起止日期筛选数据
+  const filtered=daily.filter(d=>{
+    const dFull=getFullDate(d);
+    if(startDateStr && dFull<startDateStr)return false;
+    if(endDateStr && dFull>endDateStr)return false;
+    return true;
+  });
+  const last7=filtered;
+  const dates=last7.map(d=>d.date);
+  const showDaily=ov7dShowDaily;
+  let html='<table class="dt"><thead><tr><th class="rh">区域</th><th>累计入职</th><th>累计离职</th><th>累计净增</th>';
+  if(showDaily){
+    dates.forEach(dt=>{html+=`<th colspan="3" style="background:#F8FAFC">${dt}</th>`});
+    html+='</tr><tr><th></th><th></th><th></th><th></th>';
+    dates.forEach(()=>{html+='<th>入</th><th>离</th><th>净</th>'});
+    html+='</tr>';
+  }
+  html+='</thead><tbody>';
+  const totals={cumJ:0,cumL:0,cumN:0};
+  const ddTotals=dates.map(()=>({j:0,l:0,n:0}));
+  COLORS.regions.forEach(r=>{
+    const k=r==='江门'?'jm':'cd';
+    const cj=last7.reduce((s,d)=>s+d[k+'_j'],0), cl=last7.reduce((s,d)=>s+d[k+'_l'],0), cn=cj-cl;
+    html+=`<tr><td class="rh">${r}</td><td>${fmt(cj)}</td><td>${fmt(cl)}</td><td class="${cn>=0?'c-pos':'c-neg'}">${cn>=0?'+':''}${fmt(cn)}</td>`;
+    if(showDaily){
+      last7.forEach((d,i)=>{
+        html+=`<td>${d[k+'_j']}</td><td>${d[k+'_l']}</td><td class="${d[k+'_n']>=0?'c-pos':'c-neg'}">${d[k+'_n']>=0?'+':''}${d[k+'_n']}</td>`;
+        ddTotals[i].j+=d[k+'_j']; ddTotals[i].l+=d[k+'_l']; ddTotals[i].n+=d[k+'_n']
+      });
+    }
+    totals.cumJ+=cj; totals.cumL+=cl; totals.cumN+=cn;
+    html+='</tr>';
+  });
+  html+=`<tr class="tot"><td class="rh">合计</td><td>${fmt(totals.cumJ)}</td><td>${fmt(totals.cumL)}</td>`+
+    `<td class="${totals.cumN>=0?'c-pos':'c-neg'}">${totals.cumN>=0?'+':''}${fmt(totals.cumN)}</td>`;
+  if(showDaily){
+    ddTotals.forEach(d=>{html+=`<td>${d.j}</td><td>${d.l}</td><td class="${d.n>=0?'c-pos':'c-neg'}">${d.n>=0?'+':''}${d.n}</td>`});
+  }
+  html+='</tr></tbody></table>';
+  $('#overview7d').innerHTML=html;
+  const btn=document.getElementById('btnToggle7d');
+  if(btn)btn.textContent=showDaily?'隐藏每日明细':'显示每日明细';
+}
+function toggle7dDaily(){ov7dShowDaily=!ov7dShowDaily;renderOverview7d()}
+
+function renderFunnel(){
+  const s=DATA.snapshot;
+  const total=s.interviewTotal||1, pass=s.interviewPass||0, report=s.reportCount||0;
+  const passRate=(pass/total*100).toFixed(1), reportRate=(report/pass*100||0).toFixed(1);
+  const maxW=100;
+  const items=[
+    {label:'面试总人数',num:total,pct:'100%',w:maxW,color:'#3B82F6'},
+    {label:'通过人数',num:pass,pct:passRate+'%',w:pass/total*maxW,color:'#8B5CF6'},
+    {label:'报到人数',num:report,pct:reportRate+'%',w:report/total*maxW,color:'#22C55E'}
+  ];
+  let html='';
+  items.forEach(it=>{
+    html+=`<div class="funnel-item">
+      <div class="funnel-label">${it.label}</div>
+      <div class="funnel-bar-wrap"><div class="funnel-bar-outer"><div class="funnel-bar-inner" style="width:${it.w}%;background:${it.color}">${fmt(it.num)}</div></div></div>
+      <div><div class="funnel-num">${fmt(it.num)}</div><div class="funnel-pct">${it.pct}</div></div>
+    </div>`
+  });
+  $('#funnelMetrics').innerHTML=html
+}
+
+let ovTrendChart=null;
+function renderOverviewTrend(){
+  const daily=DATA.daily;
+  const lastDateObj=daily[daily.length-1].dateObj;
+  const lastDateFull=lastDateObj.getFullYear()+'-'+String(lastDateObj.getMonth()+1).padStart(2,'0')+'-'+String(lastDateObj.getDate()).padStart(2,'0');
+  // 起始日期
+  const startInput=$('#ovTrendStartDate');
+  const startDateStr=startInput?startInput.value:'';
+  // 结束日期
+  const endInput=$('#ovTrendEndDate');
+  const endDateStr=endInput?endInput.value:lastDateFull;
+  // 根据起止日期筛选数据
+  const filtered=daily.filter(d=>{
+    const dFull=getFullDate(d);
+    if(startDateStr && dFull<startDateStr) return false;
+    if(endDateStr && dFull>endDateStr) return false;
+    return true;
+  });
+  // 使用筛选后的数据（可能为空）
+  const lastN=filtered;
+  const labels=lastN.map(d=>d.date);
+  const targetVal=parseInt($('#ovTargetLine').value)||55;
+  // 日净增数据
+  const totalLine=lastN.map(d=>d.jm_n+d.cd_n);
+  const jmLine=lastN.map(d=>d.jm_n);
+  const cdLine=lastN.map(d=>d.cd_n);
+  const targetLine=new Array(lastN.length).fill(targetVal);
+  if(ovTrendChart){ovTrendChart.destroy();ovTrendChart=null}
+  const canvas=$('#ovTrendChart');
+  const ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ovTrendChart=new Chart(canvas,{
+    type:'line',
+    data:{labels,datasets:[
+      {label:'总日净增',data:totalLine,borderColor:'#F59E0B',backgroundColor:'#F59E0B20',fill:false,tension:.3,borderWidth:2.5,pointRadius:0},
+      {label:'江门日净增',data:jmLine,borderColor:'#3B82F6',backgroundColor:'#3B82F610',fill:false,tension:.3,borderWidth:1.5,pointRadius:0},
+      {label:'成都日净增',data:cdLine,borderColor:'#22C55E',backgroundColor:'#22C55E10',fill:false,tension:.3,borderWidth:1.5,pointRadius:0},
+      {label:'日目标线('+targetVal+'人/日)',data:targetLine,borderColor:'#EF4444',borderDash:[6,3],borderWidth:1.5,pointRadius:0,fill:false}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:10},usePointStyle:true,padding:12,boxWidth:8}}},scales:{y:{grid:{color:'#F1F5F9'},ticks:{font:{size:10}},title:{display:true,text:'日净增人数',font:{size:10},color:'#94A3B8'}},x:{grid:{display:false},ticks:{font:{size:9},maxTicksLimit:15}}},interaction:{intersect:false,mode:'index'}}
+  })
+}
+
+function renderOverview(){
+  renderOverviewKPI();renderSecondaryKPI();renderOverviewStructure();renderFunnel()
+}
+
+function renderSecondaryKPI(){
+  const s=DATA.snapshot;
+  const m=DATA.monthly||{};
+  const passRate=s.interviewTotal?(s.interviewPass/s.interviewTotal*100).toFixed(1):'0.0';
+  const reportRate=s.interviewPass?(s.reportCount/s.interviewPass*100).toFixed(1):'0.0';
+  const jmJoin=m.jmJoin||0,cdJoin=m.cdJoin||0;
+  const jmLeave=m.jmLeave||0,cdLeave=m.cdLeave||0;
+  const items=[
+    {label:'面试通过率',value:passRate+'%',icon:'ic-blue',num:passRate},
+    {label:'报到率',value:reportRate+'%',icon:'ic-purple',num:reportRate},
+    {label:'累计入职',value:fmt(jmJoin+cdJoin),icon:'ic-green',sub:`江${jmJoin} 成${cdJoin}`},
+    {label:'累计离职',value:fmt(jmLeave+cdLeave),icon:'ic-red',sub:`江${jmLeave} 成${cdLeave}`},
+    {label:'面试总人数',value:fmt(s.interviewTotal),icon:'ic-amber'}
+  ];
+  let html='';
+  items.forEach(it=>{
+    html+=`<div class="sec-card"><div class="sec-icon ${it.icon}">${it.num!=null?'%':'#'}</div><div><div class="sec-num">${it.value}</div><div class="sec-label">${it.label}${it.sub?' · '+it.sub:''}</div></div></div>`
+  });
+  $('#overviewSecondary').innerHTML=html
+}
+
+// ==================== TARGETS ====================
+function renderTargets(){
+  const daily=DATA.daily;
+  // 读取目标开始时间，只计算该日期之后的净增
+  const startDateStr=$('#targetStartDate').value;
+  const filtered=daily.filter(d=>{
+    if(!startDateStr)return true;
+    const dFull=getFullDate(d);
+    return dFull>=startDateStr;
+  });
+  const jmNet=filtered.reduce((s,d)=>s+d.jm_n,0);
+  const cdNet=filtered.reduce((s,d)=>s+d.cd_n,0);
+  const s=DATA.snapshot;
+  let html='';
+  COLORS.regions.forEach(r=>{
+    const target=DATA.targets[r]||0;
+    const current=r==='江门'?jmNet:cdNet;
+    const active=r==='江门'?s.jmActive:s.cdActive;
+    const gap=Math.max(0,target-current);
+    const rate=target?Math.min(current/target*100,200):0;
+    const barCls=rate>=100?'bar-green':rate>=50?'bar-amber':'bar-red';
+    const statusTag='';
+    html+=`<div class="progress-row">
+      <div class="progress-label">${r}</div>
+      <div class="progress-wrap">
+        <div class="progress-bar-outer"><div class="progress-bar-inner ${barCls}" style="width:${Math.min(rate,100)}%"><span class="progress-pct">${rate.toFixed(1)}%</span></div></div>
+        <div class="progress-detail">
+          <span>净增目标: <input type="number" class="target-input" value="${target}" data-region="${r}" onchange="onTargetChange(this)"> 人</span>
+          <span>实际净增: <b style="color:${current>=target?'#22C55E':'#3B82F6'}">${current>=0?'+':''}${fmt(current)}</b></span>
+          <span>缺口: <b style="color:${gap>0?'#EF4444':'#22C55E'}">${fmt(gap)}</b></span>
+          <span>总在职: <span class="tag tag-active">${fmt(active)}人</span></span>
+        </div>
+      </div>
+    </div>`
+  });
+  // 合计行
+  const totalTarget=COLORS.regions.reduce((s,r)=>s+(DATA.targets[r]||0),0);
+  const totalCurrent=jmNet+cdNet;
+  const totalGap=Math.max(0,totalTarget-totalCurrent);
+  const totalRate=totalTarget?Math.min(totalCurrent/totalTarget*100,200):0;
+  const totalBarCls=totalRate>=100?'bar-green':totalRate>=50?'bar-amber':'bar-red';
+  html+=`<div class="progress-row" style="border-top:1px solid #E2E8F0;padding-top:8px;margin-top:4px">
+    <div class="progress-label" style="color:#1A2744">合计</div>
+    <div class="progress-wrap">
+      <div class="progress-bar-outer"><div class="progress-bar-inner ${totalBarCls}" style="width:${Math.min(totalRate,100)}%"><span class="progress-pct">${totalRate.toFixed(1)}%</span></div></div>
+      <div class="progress-detail">
+        <span>净增目标: <b>${fmt(totalTarget)}</b> 人</span>
+        <span>实际净增: <b style="color:${totalCurrent>=totalTarget?'#22C55E':'#3B82F6'}">${totalCurrent>=0?'+':''}${fmt(totalCurrent)}</b></span>
+        <span>缺口: <b style="color:${totalGap>0?'#EF4444':'#22C55E'}">${fmt(totalGap)}</b></span>
+        <span>总在职: <span class="tag tag-active">${fmt(s.totalActive)}人</span></span>
+      </div>
+    </div>
+  </div>`;
+  $('#progressSection').innerHTML=html
+}
+function onTargetChange(el){
+  DATA.targets[el.dataset.region]=parseInt(el.value)||0;
+  renderTargets()
+}
+
+// ==================== TREND CHART ====================
+let trendChart=null,jobAreaChart=null;
+let trendMode='net',trendDays=30;
+
+function renderTrendChart(){
+  const daily=DATA.daily.slice(-trendDays);
+  const labels=daily.map(d=>d.date);
+  const datasets=[];
+  const showNet=trendMode==='net'||trendMode==='all';
+  const showJL=trendMode==='jl'||trendMode==='all';
+
+  COLORS.regions.forEach((r,i)=>{
+    const key=r==='江门'?'jm':'cd';
+    const color=COLORS[i===0?'jm':'cd'];
+    if(showNet) datasets.push({label:r+' 净增',data:daily.map(d=>d[key+'_n']),borderColor:color,backgroundColor:color+'20',fill:false,tension:.3,borderWidth:2,pointRadius:trendDays<=14?2:0});
+    if(showJL){
+      datasets.push({label:r+' 入职',data:daily.map(d=>d[key+'_j']),borderColor:'#3B82F6',backgroundColor:'#3B82F620',fill:false,tension:.3,borderWidth:1.5,pointRadius:0,borderDash:[4,2]});
+      datasets.push({label:r+' 离职',data:daily.map(d=>d[key+'_l']),borderColor:'#EF4444',backgroundColor:'#EF444420',fill:false,tension:.3,borderWidth:1.5,pointRadius:0,borderDash:[4,2]})
+    }
+  });
+
+  if(trendChart)trendChart.destroy();
+  trendChart=new Chart($('#trendChart'),{
+    type:'line',
+    data:{labels,datasets},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:10},usePointStyle:true,padding:12,boxWidth:8}}},scales:{y:{grid:{color:'#F1F5F9'},ticks:{font:{size:10}}},x:{grid:{display:false},ticks:{font:{size:9},maxTicksLimit:15}}},interaction:{intersect:false,mode:'index'}}
+  })
+}
+
+function renderJobAreaChart(){
+  const daily=DATA.daily.slice(-trendDays);
+  const labels=daily.map(d=>d.date);
+  const jobNames=COLORS.jobNames;
+  // 用每日真实工种入职数据构建堆叠面积图
+  // 计算初始基线（从daily中第一个数据点的累计在职按工种占比分配）
+  const s=DATA.snapshot;
+  const totalBase=s.totalActive||1;
+  // 初始各工种占比来自在职清单
+  const jmJobShare=jobNames.map(j=>((s.jmJobs||{})[j]||0)+(s.cdJobs||{})[j]||0);
+  const baseActive=jmJobShare.map(v=>Math.round(totalBase*v/jmJobShare.reduce((a,b)=>a+b,0)||1));
+
+  // 每日累计在职：基线 + 该日之前的净增按工种分配
+  const datasets=jobNames.map((j,ji)=>{
+    const data=daily.map((d,di)=>{
+      // 截至该日的累计净增按工种分配
+      const totalNetSoFar=daily.slice(0,di+1).reduce((s,dd)=>s+dd.jm_n+dd.cd_n,0);
+      const totalJoinSoFar=daily.slice(0,di+1).reduce((s,dd)=>{
+        return s+dd.jobs_jm.reduce((a,b)=>a+b,0)+dd.jobs_cd.reduce((a,b)=>a+b,0);
+      },0);
+      const jobJoinSoFar=daily.slice(0,di+1).reduce((s,dd)=>s+dd.jobs_jm[ji]+dd.jobs_cd[ji],0);
+      if(totalJoinSoFar>0){
+        return Math.max(0, Math.round(totalBase * jobJoinSoFar / totalJoinSoFar));
+      }
+      return baseActive[ji];
+    });
+    return{label:j,data,
+    backgroundColor:COLORS.jobs[ji]+'CC',borderColor:COLORS.jobs[ji],borderWidth:1,fill:true,tension:.3,pointRadius:0}
+  });
+
+  if(jobAreaChart)jobAreaChart.destroy();
+  jobAreaChart=new Chart($('#jobAreaChart'),{
+    type:'line',
+    data:{labels,datasets},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:10},usePointStyle:true,padding:12,boxWidth:8}}},scales:{y:{stacked:true,grid:{color:'#F1F5F9'},ticks:{font:{size:10}}},x:{grid:{display:false},ticks:{font:{size:9},maxTicksLimit:15}}},interaction:{intersect:false,mode:'index'}}
+  })
+}
+
+function initTrendControls(){
+  const days=[7,14,30];
+  const modes=[{k:'net',l:'净增'},{k:'jl',l:'入离职'},{k:'all',l:'全部'}];
+  let html='天数:';
+  days.forEach(d=>{html+=`<button class="btn ${d===trendDays?'active':''}" onclick="setTrendDays(${d})">${d}天</button>`});
+  html+='　指标:';
+  modes.forEach(m=>{html+=`<button class="btn ${m.k===trendMode?'active':''}" onclick="setTrendMode('${m.k}')">${m.l}</button>`});
+  $('#trendControls').innerHTML=html
+}
+function setTrendDays(d){trendDays=d;initTrendControls();renderTrendChart();renderJobAreaChart()}
+function setTrendMode(m){trendMode=m;initTrendControls();renderTrendChart()}
+
+// ==================== PIE CHART ====================
+let jobPie=null;
+function renderJobPie(){
+  const jd=DATA.snapshot.jmJobs||{};
+  const cdj=DATA.snapshot.cdJobs||{};
+  const activeJobs=[],activeColors=[],activeNames=[];
+  COLORS.jobNames.forEach((j,i)=>{
+    const v=(jd[j]||0)+(cdj[j]||0);
+    if(v>0){activeJobs.push(v);activeColors.push(COLORS.jobs[i]);activeNames.push(j)}
+  });
+  if(jobPie)jobPie.destroy();
+  jobPie=new Chart($('#jobPieChart'),{
+    type:'doughnut',
+    data:{labels:activeNames,datasets:[{data:activeJobs,backgroundColor:activeColors,borderWidth:2,borderColor:'#fff'}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:10},usePointStyle:true,padding:10,boxWidth:8}}},cutout:'55%'}
+  })
+}
+
+// ==================== SUPPLIER CHART ====================
+let supplierChart=null;
+function renderSupplier(){
+  const names=DATA.snapshot.topSuppliers||COLORS.supplierNames;
+  const sd=DATA.snapshot.supplierCount||{};
+  const vals=names.map(n=>sd[n]||0);
+  // 动态颜色
+  const palette=['#3B82F6','#22C55E','#F59E0B','#8B5CF6','#EC4899','#14B8A6','#F97316','#6366F1','#EF4444','#84CC16','#06B6D4','#D946EF','#0EA5E9','#A855F7','#F43F5E'];
+  const bgColors=vals.map((_,i)=>palette[i%palette.length]);
+  if(supplierChart)supplierChart.destroy();
+  // 根据数据量动态调整高度
+  const h=Math.max(200,Math.min(400,names.length*28));
+  const canvas=$('#supplierChart');
+  canvas.parentElement.style.height=h+'px';
+  supplierChart=new Chart(canvas,{
+    type:'bar',
+    data:{labels:names,datasets:[{data:vals,backgroundColor:bgColors,borderRadius:4,barThickness:Math.max(12,Math.min(24,Math.floor(h/names.length)))}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:'#F1F5F9'},ticks:{font:{size:10}}},y:{grid:{display:false},ticks:{font:{size:11,weight:500}}}}}
+  })
+}
+
+// ==================== SKILL TABLE ====================
+function renderSkillTable(){
+  const skillData=[{name:'大工'},{name:'中工'},{name:'小工'}];
+  const rowCls=['sk-dagong','sk-zhonggong','sk-xiaogong'];
+
+  let html='<table class="skill-table"><thead><tr><th class="rh" style="width:56px">技能</th><th>需求 <span class="badge badge-editable">可调</span></th><th>在职</th><th>缺口</th><th>占比</th><th>满足率</th><th>缺口占比</th><th>紧急度</th></tr></thead><tbody>';
+
+  let totalDemand=0,totalActive=0,totalGap=0;
+  const rows=skillData.map(sk=>{
+    const demand=DATA.skillDemand[sk.name]||0;
+    const active=DATA.snapshot.skills[sk.name]||0;
+    const gap=Math.max(0,demand-active);
+    totalDemand+=demand;totalActive+=active;totalGap+=gap;
+    return{...sk,demand,active,gap}
+  });
+
+  rows.forEach((r,i)=>{
+    const share=totalActive?(r.active/totalActive*100).toFixed(1):0;
+    const satRate=r.demand?(r.active/r.demand*100).toFixed(1):'-';
+    const gapShare=totalGap?(r.gap/totalGap*100).toFixed(1):0;
+    const urgPct=r.demand?(r.gap/r.demand*100):0;
+    const urgCls=urgPct>=50?'urg-high':urgPct>=20?'urg-mid':'urg-low';
+    const urgText=urgPct>=50?'高':urgPct>=20?'中':'低';
+
+    html+=`<tr class="${rowCls[i]}">
+      <td class="rh">${r.name}</td>
+      <td><input type="number" class="demand-input" value="${r.demand}" data-skill="${r.name}" onchange="onDemandChange(this)"></td>
+      <td><b>${fmt(r.active)}</b></td>
+      <td style="color:${r.gap>0?'#EF4444':'#22C55E'}">${fmt(r.gap)}</td>
+      <td>${share}%</td>
+      <td style="color:${parseFloat(satRate)>=90?'#22C55E':parseFloat(satRate)>=70?'#F59E0B':'#EF4444'}">${satRate}%</td>
+      <td>${gapShare}%</td>
+      <td class="${urgCls}">${urgText}</td>
+    </tr>`
+  });
+
+  const tSat=totalDemand?(totalActive/totalDemand*100).toFixed(1):'-';
+  html+=`<tr style="font-weight:600;background:#F8FAFC">
+    <td class="rh">合计</td><td>${fmt(totalDemand)}</td><td>${fmt(totalActive)}</td>
+    <td style="color:${totalGap>0?'#EF4444':'#22C55E'}">${fmt(totalGap)}</td>
+    <td>100%</td><td>${tSat}%</td><td>100%</td><td></td>
+  </tr></tbody></table>`;
+  $('#skillTableWrap').innerHTML=html
+}
+function onDemandChange(el){
+  DATA.skillDemand[el.dataset.skill]=parseInt(el.value)||0;
+  renderSkillTable()
+}
+
+// ==================== EXCEL PARSING ====================
+// Excel序列号日期 → JS Date（处理xlsx中存储为数字的日期）
+function excelSerialToDate(v){
+  if(v instanceof Date)return v;
+  if(typeof v==='number'){return new Date((v-25569)*86400000)}
+  if(typeof v==='string'){
+    const d=new Date(v);
+    if(!isNaN(d.getTime()))return d;
+  }
+  return null;
+}
+
+function onFileSelected(e){
+  const file=e.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=function(ev){
+    try{
+      const wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array'});
+      parseExcelData(wb);
+      showToast('数据加载成功，已切换为真实数据','success')
+    }catch(err){showToast('文件解析失败：'+err.message,'error')}
+  };
+  reader.readAsArrayBuffer(file)
+}
+
+function parseExcelData(wb){
+  const intvSheet=wb.Sheets['面试清单'];
+  const leaveSheet=wb.Sheets['离职清单'];
+  const activeSheet=wb.Sheets['在职清单'];
+  const supplierSheet=wb.Sheets['供应商管理'];
+  if(!intvSheet){showToast('未找到"面试清单"Sheet','error');return}
+
+  const intvRows=XLSX.utils.sheet_to_json(intvSheet,{header:1,defval:'',raw:false,dateNF:'yyyy-mm-dd'});
+  const leaveRows=leaveSheet?XLSX.utils.sheet_to_json(leaveSheet,{header:1,defval:'',raw:false,dateNF:'yyyy-mm-dd'}):[];
+  const activeRows=activeSheet?XLSX.utils.sheet_to_json(activeSheet,{header:1,defval:'',raw:false,dateNF:'yyyy-mm-dd'}):[];
+  // 供应商用raw模式读取数值
+  const supplierRows=supplierSheet?XLSX.utils.sheet_to_json(supplierSheet,{header:1,defval:''}):[];
+
+  const intv=intvRows.slice(1).filter(r=>r[0]);
+  const leave=leaveRows.slice(1).filter(r=>r[0]);
+  const active=activeRows.slice(1).filter(r=>r[0]);
+
+  const today=new Date();today.setHours(0,0,0,0);
+  const monthStart=new Date(today.getFullYear(),today.getMonth(),1);
+  const regions=['江门','成都'];
+  const jobNames=COLORS.jobNames;
+  const skillNames=COLORS.skills;
+
+  // ===== 从供应商管理Sheet提取真实供应商名称 =====
+  const realSupplierNames=[];
+  supplierRows.slice(1).forEach(r=>{
+    if(r[2] && String(r[2]).trim()) realSupplierNames.push(String(r[2]).trim());
+  });
+  if(!realSupplierNames.length) realSupplierNames.push('001','002','003');
+
+  // ===== KPI统计 =====
+  let interviewTotal=0,interviewPass=0,reportCount=0;
+  intv.forEach(r=>{
+    const result=String(r[8]||'').trim();
+    const reported=String(r[9]||'').trim();
+    if(result||reported) interviewTotal++;
+    if(result==='通过') interviewPass++;
+    if(reported==='是') reportCount++;
+  });
+  if(!interviewTotal) intv.forEach(r=>{if(r[2])interviewTotal++});
+
+  // ===== 从在职清单获取精确在职数据 =====
+  let totalActive=0,jmActive=0,cdActive=0;
+  let jmJobs={},cdJobs={},skills={};
+  let jmSkills={},cdSkills={},jmJobSkills={},cdJobSkills={};
+  jobNames.forEach(j=>{jmJobs[j]=0;cdJobs[j]=0;jmJobSkills[j]={};cdJobSkills[j]={};skillNames.forEach(s=>{jmJobSkills[j][s]=0;cdJobSkills[j][s]=0})});
+  skillNames.forEach(s=>{skills[s]=0;jmSkills[s]=0;cdSkills[s]=0});
+  // 动态供应商计数（按名称）
+  const supplierCount={};
+  realSupplierNames.forEach(n=>supplierCount[n]=0);
+
+  active.forEach(r=>{
+    const job=String(r[3]||'').trim();
+    const skill=String(r[4]||'').trim();
+    const supplier=String(r[5]||'').trim();
+    const region=String(r[8]||'').trim();
+    if(!region)return;
+    totalActive++;
+    const isJm=region.includes('江门');
+    if(isJm)jmActive++;else cdActive++;
+    if(jobNames.includes(job)){(isJm?jmJobs:cdJobs)[job]++}
+    if(skillNames.includes(skill)){skills[skill]++;if(isJm)jmSkills[skill]++;else cdSkills[skill]++}
+    if(jobNames.includes(job)&&skillNames.includes(skill)){(isJm?jmJobSkills:cdJobSkills)[job][skill]++}
+    if(supplierCount[supplier]!==undefined)supplierCount[supplier]++;
+    else if(supplier){supplierCount[supplier]=(supplierCount[supplier]||0)+1;realSupplierNames.push(supplier)}
+  });
+
+  // 按数量降序排列供应商
+  const sortedSuppliers=realSupplierNames.filter(n=>supplierCount[n]>0).sort((a,b)=>supplierCount[b]-supplierCount[a]);
+  const topSuppliers=sortedSuppliers.slice(0,15); // 图表最多展示15个
+
+  // ===== 按日期统计入职（从在职清单的入职日期） =====
+  const joinByDateRegion={}; // date -> {jm: count, cd: count}
+  const joinByDateJob={};    // date -> {jm: {job:count}, cd: {job:count}}
+  active.forEach(r=>{
+    const entryDate=excelSerialToDate(r[6]);
+    const region=String(r[8]||'').trim();
+    const job=String(r[3]||'').trim();
+    if(!entryDate||!region)return;
+    const ds=entryDate.getFullYear()+'-'+String(entryDate.getMonth()+1).padStart(2,'0')+'-'+String(entryDate.getDate()).padStart(2,'0');
+    const isJm=region.includes('江门');
+    const rk=isJm?'jm':'cd';
+    const rl=isJm?'江门':'成都';
+    if(!joinByDateRegion[ds]) joinByDateRegion[ds]={jm:0,cd:0};
+    joinByDateRegion[ds][rk]++;
+    if(!joinByDateJob[ds]) joinByDateJob[ds]={jm:{},cd:{}};
+    if(!joinByDateJob[ds][rk][job])joinByDateJob[ds][rk][job]=0;
+    joinByDateJob[ds][rk][job]++;
+  });
+
+  // ===== 按日期统计离职 =====
+  const leaveByDateRegion={};
+  const leaveByDateJob={};
+  let jmMonthlyLeave=0,cdMonthlyLeave=0;
+  leave.forEach(r=>{
+    const ld=excelSerialToDate(r[7]); // H列=离职日期
+    const region=String(r[13]||'').trim();
+    const job=String(r[3]||'').trim();
+    if(!ld||!region)return;
+    const ds=ld.getFullYear()+'-'+String(ld.getMonth()+1).padStart(2,'0')+'-'+String(ld.getDate()).padStart(2,'0');
+    const isJm=region.includes('江门');
+    const rk=isJm?'jm':'cd';
+    if(!leaveByDateRegion[ds]) leaveByDateRegion[ds]={jm:0,cd:0};
+    leaveByDateRegion[ds][rk]++;
+    if(!leaveByDateJob[ds]) leaveByDateJob[ds]={jm:{},cd:{}};
+    if(!leaveByDateJob[ds][rk][job])leaveByDateJob[ds][rk][job]=0;
+    leaveByDateJob[ds][rk][job]++;
+    if(ld>=monthStart){if(isJm)jmMonthlyLeave++;else cdMonthlyLeave++}
+  });
+
+  // ===== 构建日报数组 =====
+  const allDateStrs=new Set([...Object.keys(joinByDateRegion),...Object.keys(leaveByDateRegion)]);
+  if(!allDateStrs.size){showToast('未找到有效的入职/离职日期','error');return}
+  const allDatesArr=[...allDateStrs].sort();
+  const startDStr=allDatesArr[0];
+  const startD=new Date(startDStr+'T00:00:00');
+  const endD=new Date(today);
+  if(endD<startD)endD=startD;
+  const dayMs=86400000;
+  const totalDays=Math.max(1,Math.round((endD.getTime()-startD.getTime())/dayMs)+1);
+  const daily=[];
+  // 累计在职（从第一天开始累加入职-离职）
+  let cumJm=0,cumCd=0;
+  for(let i=0;i<totalDays;i++){
+    const d=new Date(startD.getTime()+i*dayMs);
+    const ds=fmtDate(d);
+    const mm=String(d.getMonth()+1).padStart(2,'0');
+    const dd=String(d.getDate()).padStart(2,'0');
+    const jm_j=joinByDateRegion[ds]?joinByDateRegion[ds].jm:0;
+    const jm_l=leaveByDateRegion[ds]?leaveByDateRegion[ds].jm:0;
+    const cd_j=joinByDateRegion[ds]?joinByDateRegion[ds].cd:0;
+    const cd_l=leaveByDateRegion[ds]?leaveByDateRegion[ds].cd:0;
+    cumJm+=jm_j-jm_l;
+    cumCd+=cd_j-cd_l;
+    // 按工种的日数据
+    const jmJobsDay=jobNames.map(j=>(joinByDateJob[ds]&&joinByDateJob[ds].jm)?(joinByDateJob[ds].jm[j]||0):0);
+    const cdJobsDay=jobNames.map(j=>(joinByDateJob[ds]&&joinByDateJob[ds].cd)?(joinByDateJob[ds].cd[j]||0):0);
+    daily.push({
+      date:mm+'-'+dd,dateObj:d,
+      jm_j,jm_l,jm_n:jm_j-jm_l,
+      cd_j,cd_l,cd_n:cd_j-cd_l,
+      cumJm,cumCd,
+      jobs_jm:jmJobsDay,jobs_cd:cdJobsDay
+    });
+  }
+
+  // 月度入职（从在职清单中入职日期>=月初的）
+  let jmMonthlyJoin=0,cdMonthlyJoin=0;
+  active.forEach(r=>{
+    const entryDate=excelSerialToDate(r[6]);
+    const region=String(r[8]||'').trim();
+    if(entryDate&&entryDate>=monthStart&&region){
+      if(region.includes('江门'))jmMonthlyJoin++;else cdMonthlyJoin++;
+    }
+  });
+
+  // ===== 更新全局颜色/名称（动态供应商） =====
+  COLORS.supplierNames=topSuppliers;
+  const supplierPalette=['#3B82F6','#22C55E','#F59E0B','#8B5CF6','#EC4899','#14B8A6','#F97316','#6366F1','#EF4444','#84CC16','#06B6D4','#D946EF','#0EA5E9','#A855F7','#F43F5E'];
+  COLORS.suppliers=topSuppliers.map((_,i)=>supplierPalette[i%supplierPalette.length]);
+
+  const last7=daily.slice(-7);
+  DATA={
+    reportDate:fmtDate(today),
+    periodStart:startDStr,
+    snapshot:{
+      totalActive,jmActive,cdActive,
+      jmJobs,cdJobs,jmSkills,cdSkills,jmJobSkills,cdJobSkills,
+      skills,supplierCount,topSuppliers,supplierNames:topSuppliers,
+      interviewTotal,interviewPass,reportCount
+    },
+    targets:DATA.targets||{江门:2500,成都:900},
+    skillDemand:DATA.skillDemand||{大工:450,中工:1500,小工:2000},
+    daily,
+    weekly:{jmJoin:last7.reduce((s,d)=>s+d.jm_j,0),jmLeave:last7.reduce((s,d)=>s+d.jm_l,0),
+      cdJoin:last7.reduce((s,d)=>s+d.cd_j,0),cdLeave:last7.reduce((s,d)=>s+d.cd_l,0)},
+    monthly:{jmJoin:jmMonthlyJoin,jmLeave:jmMonthlyLeave,cdJoin:cdMonthlyJoin,cdLeave:cdMonthlyLeave},
+    prevWeekActive:totalActive-(daily.slice(-7).reduce((s,d)=>s+d.jm_n+d.cd_n,0)),
+    prevWeekJmActive:jmActive-(daily.slice(-7).reduce((s,d)=>s+d.jm_n,0)),
+    prevWeekCdActive:cdActive-(daily.slice(-7).reduce((s,d)=>s+d.cd_n,0))
+  };
+
+  DATA._isRealData=true;
+  ensureDefaults();
+  $('#headerSub').innerHTML=`真实数据 · 报告周期：${DATA.periodStart} ~ ${DATA.reportDate}`;
+  setupDatePickers();
+  destroyAllCharts();
+  _renderedTabs.clear();
+  renderOverviewTab();
+  _renderedTabs.add('overview');
+  saveDataToLocal()
+}
+
+// ==================== DATE CHANGE ====================
+function onDateChange(){
+  const v=$('#reportDate').value;
+  if(v){DATA.reportDate=v;showToast('报告日期已更新为 '+v);
+    const ps=new Date(v);ps.setDate(ps.getDate()-29);
+    DATA.periodStart=ps.toISOString().slice(0,10);
+    const ds='真实数据';
+    $('#headerSub').innerHTML=`${ds} · 报告周期：${DATA.periodStart} ~ ${DATA.reportDate}`
+  }
+}
+
+// ==================== LOCAL STORAGE ====================
+function saveDataToLocal(){
+  try{
+    // 深拷贝并显式转换Date为ISO字符串
+    const copy=JSON.parse(JSON.stringify(DATA,(k,v)=>{
+      if(v instanceof Date) return v.toISOString();
+      return v;
+    }));
+    localStorage.setItem('wd_data',JSON.stringify(copy));
+    localStorage.setItem('wd_ts',Date.now().toString())
+  }catch(e){console.error('saveDataToLocal error:',e)}
+}
+function loadFromLocal(){
+  try{
+    const raw=localStorage.getItem('wd_data');
+    if(!raw)return false;
+    DATA=JSON.parse(raw);
+    if(!DATA.daily||!DATA.daily.length)return false;
+    // 重建 dateObj（JSON 不保留 Date 对象）
+    DATA.daily.forEach(d=>{
+      if(d.dateObj && typeof d.dateObj==='string'){
+        // ISO string → Date
+        d.dateObj=new Date(d.dateObj);
+      } else if(!d.dateObj && d.date){
+        // 无dateObj，从date字符串重建
+        const parts=d.date.split('-');
+        if(parts.length===2){
+          d.dateObj=new Date(2026,parseInt(parts[0])-1,parseInt(parts[1]));
+        } else if(parts.length===3){
+          d.dateObj=new Date(d.date);
+        }
+      }
+      // 确保dateObj是有效Date
+      if(!(d.dateObj instanceof Date)||isNaN(d.dateObj.getTime())){
+        d.dateObj=new Date();
+      }
+    });
+    // 恢复动态供应商列表
+    if(DATA.snapshot&&DATA.snapshot.topSuppliers){
+      COLORS.supplierNames=DATA.snapshot.topSuppliers;
+      const palette=['#3B82F6','#22C55E','#F59E0B','#8B5CF6','#EC4899','#14B8A6','#F97316','#6366F1','#EF4444','#84CC16','#06B6D4','#D946EF','#0EA5E9','#A855F7','#F43F5E'];
+      COLORS.suppliers=DATA.snapshot.topSuppliers.map((_,i)=>palette[i%palette.length]);
+    }
+    // 更新页头
+    $('#headerSub').innerHTML=`真实数据 <span class="badge badge-real">LIVE</span> · 报告周期：${DATA.periodStart} ~ ${DATA.reportDate}`
+    return true
+  }catch(e){console.error('loadFromLocal error:',e);return false}
+}
+
+// ==================== INIT ====================
+// 按tab分组渲染，避免在hidden容器上创建Chart.js图表
+function renderOverviewTab(){
+  // 概览tab只有DOM渲染，无Chart.js图表
+  renderOverview(); renderTargets();
+}
+function renderTrendTab(){
+  // 趋势tab有Chart.js图表，仅在tab可见时调用
+  renderTrendChart(); renderJobAreaChart();
+}
+function renderStructureTab(){
+  // 结构tab有Chart.js图表，仅在tab可见时调用
+  renderJobPie(); renderSupplier(); renderSkillTable();
+}
+
+// ==================== REFERENCE（指标说明动态渲染） ====================
+function renderReference(){
+  const s=DATA.snapshot||{};
+  const w=DATA.weekly||{};
+  const m=DATA.monthly||{};
+  const t=DATA.targets||{};
+  const sd=DATA.skillDemand||{};
+  const daily=DATA.daily||[];
+  const isReal=DATA._isRealData;
+  const refTag=(cls,txt)=>`<span class="ref-tag ${cls}">${txt}</span>`;
+
+  // 数据概况
+  const periodStart=DATA.periodStart||'-';
+  const reportDate=DATA.reportDate||'-';
+  const dataSource=isReal?'真实数据（已加载台账 Excel）':'示例数据';
+  const totalDays=daily.length;
+  const last7=daily.slice(-7);
+  const wJmN=last7.reduce((a,d)=>a+d.jm_n,0);
+  const wCdN=last7.reduce((a,d)=>a+d.cd_n,0);
+  const passRate=s.interviewTotal?(s.interviewPass/s.interviewTotal*100).toFixed(1):'-';
+  const reportRate=s.interviewPass?(s.reportCount/s.interviewPass*100).toFixed(1):'-';
+
+  // 动态工种/供应商列表
+  const activeJobs=COLORS.jobNames.filter(j=>(s.jmJobs&&s.jmJobs[j])||(s.cdJobs&&s.cdJobs[j]));
+  const jobList=activeJobs.length?activeJobs.join('、'):'电工、钳工';
+  const supplierList=(s.topSuppliers||COLORS.supplierNames).slice(0,8).join('、');
+  const supplierTotal=(s.topSuppliers||COLORS.supplierNames).length;
+  const skillList=COLORS.skills.join('、');
+
+  // 月度数据
+  const jmMJoin=m.jmJoin||0, cdMJoin=m.cdJoin||0;
+  const jmMLeave=m.jmLeave||0, cdMLeave=m.cdLeave||0;
+  const totalMJoin=jmMJoin+cdMJoin;
+  const totalMLeave=jmMLeave+cdMLeave;
+
+  $('#referenceContent').innerHTML=`
+<div class="ref-section">
+<h3>一、数据概况</h3>
+<table class="ref-table">
+<tr><th>数据来源</th><td>${isReal?'<span class="badge badge-real">LIVE</span> '+dataSource:'<span class="badge badge-demo">示例</span> '+dataSource}</td></tr>
+<tr><th>报告周期</th><td>${periodStart} ~ ${reportDate}（共 ${totalDays} 天）</td></tr>
+<tr><th>数据记录</th><td>面试 ${fmt(s.interviewTotal)} 条 · 在职 ${fmt(s.totalActive||0)} 人 · 离职 ${fmt(daily.reduce((a,d)=>a+d.jm_l+d.cd_l,0))} 人</td></tr>
+<tr><th>覆盖区域</th><td>${COLORS.regions.join('、')}</td></tr>
+<tr><th>工种维度</th><td>${jobList}</td></tr>
+<tr><th>技能维度</th><td>${skillList}</td></tr>
+<tr><th>供应商</th><td>共 ${supplierTotal} 家（前8：${supplierList}）</td></tr>
+</table>
+</div>
+<div class="ref-section">
+<h3>二、概览页指标定义</h3>
+<table class="ref-table">
+<tr><th>当前在职</th><td>截止报告日的在职临时工总人数（当前值：<b>${fmt(s.totalActive||0)}</b> 人，江门 ${fmt(s.jmActive||0)} + 成都 ${fmt(s.cdActive||0)}）${refTag('tag-kpi','实时')}</td></tr>
+<tr><th>本周净增</th><td>最近7天 <code>入职人数 - 离职人数</code><br/>入职和离职均按实际报到/离职日期统计（当前值：江门 <b>${wJmN>=0?'+':''}${fmt(wJmN)}</b>，成都 <b>${wCdN>=0?'+':''}${fmt(wCdN)}</b>）${refTag('tag-kpi','周度')}</td></tr>
+<tr><th>面试通过率</th><td><code>面试通过人数 ÷ 面试总人数 × 100%</code><br/>累计值（当前值：<b>${fmt(s.interviewPass)}/${fmt(s.interviewTotal)} = ${passRate}%</b>）${refTag('tag-kpi','累计')}</td></tr>
+<tr><th>报到率</th><td><code>实际报到人数 ÷ 面试通过人数 × 100%</code><br/>累计值（当前值：<b>${fmt(s.reportCount)}/${fmt(s.interviewPass)} = ${reportRate}%</b>）${refTag('tag-kpi','累计')}</td></tr>
+<tr><th>累计入职</th><td>本月1日起至报告日的入职报到总人数（当前值：<b>${fmt(totalMJoin)}</b> 人，江门 ${jmMJoin} + 成都 ${cdMJoin}）${refTag('tag-kpi','月度')}</td></tr>
+<tr><th>累计离职</th><td>本月1日起至报告日的离职总人数（当前值：<b>${fmt(totalMLeave)}</b> 人，江门 ${jmMLeave} + 成都 ${cdMLeave}）${refTag('tag-kpi','月度')}</td></tr>
+<tr><th>面试总数</th><td>台账面试清单中所有面试记录总数（当前值：<b>${fmt(s.interviewTotal)}</b>）${refTag('tag-kpi','累计')}</td></tr>
+</table>
+</div>
+<div class="ref-section">
+<h3>三、目标页指标定义</h3>
+<table class="ref-table">
+<tr><th>目标人数</th><td>各区域净增目标值${refTag('tag-edit','可编辑')}<br/>当前设定：江门 <b>${fmt(t.江门)}</b>，成都 <b>${fmt(t.成都)}</b></td></tr>
+<tr><th>净增</th><td><code>报告期内报到人数 - 离职人数</code>，按区域分别统计，从在职清单入职日期和离职清单离职日期实际计算</td></tr>
+<tr><th>缺口</th><td><code>MAX(目标 - 净增, 0)</code><br/>净增超过目标时显示为0（超额完成）</td></tr>
+<tr><th>达成率</th><td><code>净增 ÷ 目标 × 100%</code><br/>≥100% 绿色 / 50~99% 橙色 / &lt;50% 红色</td></tr>
+<tr><th>7日明细表</th><td>按区域和岗位展示最近7天的入职/离职/净增，数据从台账在职清单和离职清单按日期×工种实际统计</td></tr>
+</table>
+</div>
+<div class="ref-section">
+<h3>四、趋势页指标定义</h3>
+<table class="ref-table">
+<tr><th>日净增</th><td>每日 <code>入职 - 离职</code>，按区域分别绘制折线，数据从在职清单入职日期和离职清单离职日期按日统计</td></tr>
+<tr><th>入职/离职</th><td>每日实际入职和离职人数，虚线显示</td></tr>
+<tr><th>岗位在职趋势</th><td>各岗位在职人数的堆叠面积图，数据从在职清单按入职日期×工种逐日累计统计</td></tr>
+<tr><th>时间范围</th><td>可选 7天 / 14天 / 30天${refTag('tag-edit','可切换')}</td></tr>
+</table>
+</div>
+<div class="ref-section">
+<h3>五、结构页指标定义</h3>
+<table class="ref-table">
+<tr><th>岗位分布</th><td>各岗位在职人数占比（环形图），当前工种：${jobList}</td></tr>
+<tr><th>供应商占比</th><td>各供应商当前在职人数（横向条形图），当前共 ${supplierTotal} 家供应商，展示前15家</td></tr>
+<tr><th>需求数</th><td>各技能等级的目标需求人数${refTag('tag-edit','可编辑')}<br/>当前设定：${COLORS.skills.map(s=>s+' <b>'+fmt(sd[s])+'</b>').join('、')}</td></tr>
+<tr><th>缺口</th><td><code>MAX(需求 - 在职, 0)</code></td></tr>
+<tr><th>满足率</th><td><code>在职 ÷ 需求 × 100%</code><br/>≥90% 绿 / ≥70% 橙 / &lt;70% 红</td></tr>
+<tr><th>紧急度</th><td>缺口占需求比：<code>缺口 ÷ 需求 × 100%</code><br/>≥50% 高 / ≥20% 中 / &lt;20% 低</td></tr>
+</table>
+</div>
+<div class="ref-section">
+<h3>六、页面可调节项汇总</h3>
+<table class="ref-table">
+<tr><th>截止日期</th><td>右上角日期选择器${refTag('tag-edit','可调')}<br/>影响报告日期显示</td></tr>
+<tr><th>区域净增目标</th><td>目标页进度条旁输入框${refTag('tag-edit','可调')}<br/>修改后进度条、缺口、达成率实时刷新</td></tr>
+<tr><th>技能等级需求</th><td>结构页供需表"需求"列输入框${refTag('tag-edit','可调')}<br/>修改后缺口、满足率、紧急度实时刷新</td></tr>
+<tr><th>趋势天数</th><td>趋势页 7天/14天/30天 按钮${refTag('tag-edit','可调')}</td></tr>
+<tr><th>趋势指标</th><td>趋势页 净增/入离职/全部 按钮${refTag('tag-edit','可调')}</td></tr>
+</table>
+<div class="ref-tip">
+<b>提示：</b>所有标记 <span class="badge badge-editable">可调</span> 的指标均可在页面上直接修改，无需编辑代码。<br/>
+修改目标值和需求数后，相关计算指标会自动刷新。<br/>
+${isReal?'<b>当前已加载真实数据</b>，指标说明页中的数值会随数据刷新自动更新。如需重新加载，点击右上角「加载真实数据」按钮重新选择台账文件。':'<b>当前为示例数据</b>，如需使用真实数据，请点击右上角「加载真实数据」按钮选择台账 .xlsx 文件。'}
+</div>
+</div>`;
+}
+function renderAll(){
+  // 只渲染当前active tab的内容，避免hidden canvas问题
+  const active = document.querySelector('.tab-panel.active');
+  if(!active) return;
+  const id = active.id.replace('panel-','');
+  if(id==='overview'||id==='target') renderOverviewTab();
+  else if(id==='trend') renderTrendTab();
+  else if(id==='structure') renderStructureTab();
+  else if(id==='reference') renderReference();
+}
+
+function destroyAllCharts(){
+  [ovTrendChart,trendChart,jobAreaChart,supplierChart].forEach(c=>{if(c){try{c.destroy()}catch(e){}}});
+  ovTrendChart=null;trendChart=null;jobAreaChart=null;supplierChart=null
+}
+function ensureDefaults(){
+  if(!DATA.targets) DATA.targets={'江门':2500,'成都':900};
+  if(!DATA.skillDemand) DATA.skillDemand={'大工':450,'中工':1500,'小工':2000};
+  if(!DATA.weekly) DATA.weekly={jmJoin:0,jmLeave:0,cdJoin:0,cdLeave:0};
+  if(!DATA.monthly) DATA.monthly={jmJoin:0,jmLeave:0,cdJoin:0,cdLeave:0};
+  if(!DATA.prevWeekActive) DATA.prevWeekActive=0;
+  if(!DATA.prevWeekJmActive) DATA.prevWeekJmActive=0;
+  if(!DATA.prevWeekCdActive) DATA.prevWeekCdActive=0;
+}
+function setupDatePickers(){
+  if(!DATA.daily||!DATA.daily.length)return;
+  const lastDObj=DATA.daily[DATA.daily.length-1].dateObj;
+  const lastDateFull=fmtDate(lastDObj);
+  const firstDObj=DATA.daily[0].dateObj;
+  const firstDateFull=fmtDate(firstDObj);
+  const dow=lastDObj.getDay();
+  const monOff=dow===0?-6:1-dow;
+  const monday=new Date(lastDObj); monday.setDate(lastDObj.getDate()+monOff);
+  const mStr=fmtDate(monday);
+  const el7d=$('#ov7dStartDate'); if(el7d){el7d.value=mStr;el7d.min=firstDateFull;el7d.max=lastDateFull}
+  const el7dEnd=$('#ov7dEndDate'); if(el7dEnd){el7dEnd.value=lastDateFull;el7dEnd.min=firstDateFull;el7dEnd.max=lastDateFull}
+  const d30=new Date(lastDObj); d30.setDate(lastDObj.getDate()-29);
+  const d30Str=fmtDate(d30);
+  const elTr=$('#ovTrendStartDate'); if(elTr){elTr.value=d30Str;elTr.min=firstDateFull;elTr.max=lastDateFull}
+  const elTrEnd=$('#ovTrendEndDate'); if(elTrEnd){elTrEnd.value=lastDateFull;elTrEnd.min=firstDateFull;elTrEnd.max=lastDateFull}
+}
+function fmtDate(d){
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')
+}
+function init(clearStorage){
+  destroyAllCharts();
+  if(clearStorage){
+    localStorage.removeItem('wd_data');
+    localStorage.removeItem('wd_ts');
+  }
+  // 尝试从 localStorage 恢复真实数据
+  const restored=loadFromLocal();
+  if(!restored){
+    // 无本地数据，初始化默认值，等待用户上传
+    DATA={targets:{'江门':2500,'成都':900},skillDemand:{'大工':450,'中工':1500,'小工':2000},
+      daily:[],snapshot:{totalActive:0,jmActive:0,cdActive:0,jmJobs:{},cdJobs:{},
+      jmSkills:{},cdSkills:{},jmJobSkills:{},cdJobSkills:{},skills:{},suppliers:{},
+      interviewTotal:0,interviewPass:0,reportCount:0},
+      weekly:{jmJoin:0,jmLeave:0,cdJoin:0,cdLeave:0},
+      monthly:{jmJoin:0,jmLeave:0,cdJoin:0,cdLeave:0},
+      prevWeekActive:0,prevWeekJmActive:0,prevWeekCdActive:0,
+      reportDate:new Date().toISOString().slice(0,10),
+      periodStart:new Date(Date.now()-29*86400000).toISOString().slice(0,10),
+      _isRealData:false};
+    $('#headerSub').innerHTML='请点击右上角「加载真实数据」上传台账';
+    $('#reportDate').value=DATA.reportDate;
+    renderOverviewTab();
+    _renderedTabs.add('overview');
+    return;
+  }
+  // 数据恢复成功
+  ensureDefaults();
+  $('#reportDate').value=DATA.reportDate;
+  setupDatePickers();
+  initTrendControls();
+  // 只渲染当前active tab（概览），其他tab在switchTab时按需渲染
+  renderOverviewTab();
+  _renderedTabs.add('overview');
+}
+
+// init() 由 doLogin() 触发，确保 #mainApp 可见后再初始化
+// 避免在隐藏容器上创建 Chart.js 图表导致实例异常
+</script>
+</div><!-- /#mainApp -->
+</body>
+</html>
