@@ -235,7 +235,7 @@ window.addEventListener('DOMContentLoaded',()=>{$('#mainApp').style.display='non
 </div>
 <div class="header-right">
 <span style="font-size:11px;color:#94A3B8">截止</span>
-<input id="reportDate" onchange="onDateChange()" type="date"/>
+<input id="reportDate" onchange="onDateChange();saveUIState()" type="date"/>
 <button class="btn" onclick="document.getElementById('fileInput').click()">加载真实数据</button>
 <button class="btn btn-outline" onclick="init(true)" title="清除缓存数据，重新上传">清除缓存</button>
 <input accept=".xlsx,.xls" id="fileInput" onchange="onFileSelected(event)" style="display:none" type="file"/>
@@ -271,22 +271,22 @@ window.addEventListener('DOMContentLoaded',()=>{$('#mainApp').style.display='non
 <span class="card-title-left">总目标达成进度 <span class="badge badge-editable" title="目标值可直接修改">可调</span></span>
 <div class="controls" style="margin-left:auto">
 <span style="font-size:11px;color:#64748B">目标开始时间</span>
-<input type="date" class="target-date-input" id="targetStartDate" oninput="renderTargets()" value="2026-06-01"/>
+<input type="date" class="target-date-input" id="targetStartDate" oninput="renderTargets()" onchange="saveUIState()" value="2026-06-01"/>
 </div>
 </div>
 <div class="progress-section" id="progressSection"></div>
 </div><div class="card">
-<div class="card-title"><span class="card-title-left">入离净明细</span><span style="margin-left:auto;display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:#64748B">起始</span><input type="date" class="target-date-input" id="ov7dStartDate" oninput="renderOverview7d()"/><span style="font-size:11px;color:#94A3B8">~</span><span style="font-size:11px;color:#64748B">结束</span><input type="date" class="target-date-input" id="ov7dEndDate" oninput="renderOverview7d()"/><button class="btn" id="btnToggle7d" onclick="toggle7dDaily()" style="font-size:11px;padding:3px 10px">显示每日明细</button></span></div>
+<div class="card-title"><span class="card-title-left">入离净明细</span><span style="margin-left:auto;display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:#64748B">起始</span><input type="date" class="target-date-input" id="ov7dStartDate" oninput="renderOverview7d()" onchange="saveUIState()"/><span style="font-size:11px;color:#94A3B8">~</span><span style="font-size:11px;color:#64748B">结束</span><input type="date" class="target-date-input" id="ov7dEndDate" oninput="renderOverview7d()" onchange="saveUIState()"/><button class="btn" id="btnToggle7d" onclick="toggle7dDaily()" style="font-size:11px;padding:3px 10px">显示每日明细</button></span></div>
 <div class="table-scroll" id="overview7d"></div>
 </div><div class="card">
 <div class="card-title">
 <span class="card-title-left">净增趋势</span>
 <div class="controls">
 <span style="font-size:11px;color:#64748B">起始</span>
-<input type="date" class="target-date-input" id="ovTrendStartDate" oninput="renderOverviewTrend()"/>
+<input type="date" class="target-date-input" id="ovTrendStartDate" oninput="renderOverviewTrend()" onchange="saveUIState()"/>
 <span style="font-size:11px;color:#94A3B8;margin-left:6px">~</span>
 <span style="font-size:11px;color:#64748B">结束</span>
-<input type="date" class="target-date-input" id="ovTrendEndDate" oninput="renderOverviewTrend()"/>
+<input type="date" class="target-date-input" id="ovTrendEndDate" oninput="renderOverviewTrend()" onchange="saveUIState()"/>
 <span style="font-size:11px;color:#64748B;margin-left:10px">日目标线</span>
 <input class="target-line-input" id="ovTargetLine" onchange="onTargetLineChange()" type="number" value="55"/>
 <span style="font-size:11px;color:#64748B">人</span>
@@ -809,8 +809,8 @@ function initTrendControls(){
   modes.forEach(m=>{html+=`<button class="btn ${m.k===trendMode?'active':''}" onclick="setTrendMode('${m.k}')">${m.l}</button>`});
   $('#trendControls').innerHTML=html
 }
-function setTrendDays(d){trendDays=d;initTrendControls();renderTrendChart();renderJobAreaChart()}
-function setTrendMode(m){trendMode=m;initTrendControls();renderTrendChart()}
+function setTrendDays(d){trendDays=d;initTrendControls();renderTrendChart();renderJobAreaChart();saveUIState()}
+function setTrendMode(m){trendMode=m;initTrendControls();renderTrendChart();saveUIState()}
 
 // ==================== PIE CHART ====================
 let jobPie=null;
@@ -1559,7 +1559,22 @@ function ensureDefaults(){
   if(!DATA.interview) DATA.interview={channels:{},regions:{},suppliers:{}};
   if(!DATA.resign) DATA.resign={total:0,settled:0,reasons:{},jobs:{},suppliers:{},details:[]};
   if(!DATA.targetLine) DATA.targetLine=55;
+  if(!DATA.uiState) DATA.uiState={trendDays:30,trendMode:'net'};
 }
+function saveUIState(){
+  // 保存所有日期选择器和趋势设置到 DATA.uiState
+  const s = {};
+  const els = ['reportDate','targetStartDate','ov7dStartDate','ov7dEndDate','ovTrendStartDate','ovTrendEndDate'];
+  els.forEach(id => {
+    const el = document.getElementById(id);
+    if(el && el.value) s[id] = el.value;
+  });
+  s.trendDays = trendDays;
+  s.trendMode = trendMode;
+  DATA.uiState = s;
+  saveDataToLocal();
+}
+
 function setupDatePickers(){
   if(!DATA.daily||!DATA.daily.length)return;
   const today=new Date(); today.setHours(0,0,0,0);
@@ -1571,17 +1586,40 @@ function setupDatePickers(){
   const monOff=dow===0?-6:1-dow;
   const monday=new Date(lastDObj); monday.setDate(lastDObj.getDate()+monOff);
   const mStr=fmtDate(monday);
-  const el7d=$('#ov7dStartDate'); if(el7d){el7d.value=mStr;el7d.min=firstDateFull;el7d.max=lastDateFull}
-  const el7dEnd=$('#ov7dEndDate'); if(el7dEnd){el7dEnd.value=lastDateFull;el7dEnd.min=firstDateFull;el7dEnd.max=lastDateFull}
-  const elTr=$('#ovTrendStartDate'); if(elTr){
-    // 默认当前月1号
+  const ui = DATA.uiState || {};
+
+  // reportDate
+  const elRD = $('#reportDate');
+  if(elRD) elRD.value = ui.reportDate || DATA.reportDate || fmtDate(today);
+
+  // targetStartDate
+  const elTS = $('#targetStartDate');
+  if(elTS){ elTS.value = ui.targetStartDate || '2026-06-01'; elTS.min=firstDateFull; elTS.max=lastDateFull }
+
+  // ov7dStartDate / ov7dEndDate
+  const el7d = $('#ov7dStartDate');
+  if(el7d){ el7d.value = ui.ov7dStartDate || mStr; el7d.min=firstDateFull; el7d.max=lastDateFull }
+  const el7dEnd = $('#ov7dEndDate');
+  if(el7dEnd){ el7dEnd.value = ui.ov7dEndDate || lastDateFull; el7dEnd.min=firstDateFull; el7dEnd.max=lastDateFull }
+
+  // ovTrendStartDate / ovTrendEndDate
+  const elTr = $('#ovTrendStartDate');
+  if(elTr){
     const monthFirst=new Date(today.getFullYear(),today.getMonth(),1);
     const monthFirstStr=fmtDate(monthFirst);
-    elTr.value=monthFirstStr>=firstDateFull?monthFirstStr:firstDateFull;
-    elTr.min=firstDateFull;elTr.max=lastDateFull
+    elTr.value = ui.ovTrendStartDate || (monthFirstStr>=firstDateFull?monthFirstStr:firstDateFull);
+    elTr.min=firstDateFull; elTr.max=lastDateFull;
   }
-  const elTrEnd=$('#ovTrendEndDate'); if(elTrEnd){elTrEnd.value=lastDateFull;elTrEnd.min=firstDateFull;elTrEnd.max=lastDateFull}
+  const elTrEnd = $('#ovTrendEndDate');
+  if(elTrEnd){ elTrEnd.value = ui.ovTrendEndDate || lastDateFull; elTrEnd.min=firstDateFull; elTrEnd.max=lastDateFull }
+
+  // ovTargetLine
   const elTL=$('#ovTargetLine'); if(elTL && DATA.targetLine){elTL.value=DATA.targetLine}
+
+  // 恢复趋势设置
+  if(ui.trendDays) trendDays = ui.trendDays;
+  if(ui.trendMode) trendMode = ui.trendMode;
+  initTrendControls();
 }
 function fmtDate(d){
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')
