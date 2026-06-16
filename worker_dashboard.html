@@ -6,6 +6,7 @@
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>临时工管理指标看板</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -245,6 +246,8 @@ window.addEventListener('DOMContentLoaded',()=>{$('#mainApp').style.display='non
 <button class="tab" onclick="switchTab('target')">目标</button>
 <button class="tab" onclick="switchTab('trend')">趋势</button>
 <button class="tab" onclick="switchTab('structure')">结构</button>
+<button class="tab" onclick="switchTab('interview')">面试</button>
+<button class="tab" onclick="switchTab('resign')">离职</button>
 <button class="tab" onclick="switchTab('reference')">指标说明</button>
 </div>
 <!-- ==================== 概览 ==================== -->
@@ -257,14 +260,6 @@ window.addEventListener('DOMContentLoaded',()=>{$('#mainApp').style.display='non
 <div class="card">
 <div class="card-title"><span class="card-title-left">用工结构明细</span><span class="card-subtitle">当前在职 · 按岗位和技能等级</span></div>
 <div class="table-scroll" id="overviewStructure"></div>
-</div>
-<!-- 板块三 + 五 -->
-<div class="overview-mid">
-
-<div class="funnel-card">
-<div class="card-title"><span class="card-title-left">招聘漏斗</span><span class="card-subtitle">累计</span></div>
-<div id="funnelMetrics"></div>
-</div>
 </div>
 <!-- 板块四：30日净增趋势 -->
 
@@ -337,6 +332,58 @@ window.addEventListener('DOMContentLoaded',()=>{$('#mainApp').style.display='non
 <div class="table-scroll" id="skillTableWrap"></div>
 </div>
 </section>
+<!-- ==================== 面试 ==================== -->
+<section class="tab-panel" id="panel-interview">
+<!-- 招聘漏斗 -->
+<div class="card">
+<div class="card-title"><span class="card-title-left">招聘漏斗</span><span class="card-subtitle">累计</span></div>
+<div id="funnelMetrics"></div>
+</div>
+<!-- 面试KPI -->
+<div class="kpi-row" id="interviewKPI" style="grid-template-columns:repeat(4,1fr)"></div>
+<!-- 面试渠道对比 -->
+<div class="chart-row">
+<div class="card">
+<div class="card-title"><span class="card-title-left">面试渠道分布</span></div>
+<div class="chart-box short"><canvas id="channelPieChart"></canvas></div>
+</div>
+<div class="card">
+<div class="card-title"><span class="card-title-left">各地区面试人数</span></div>
+<div class="chart-box short"><canvas id="intvRegionChart"></canvas></div>
+</div>
+</div>
+<!-- 供应商面试排名 -->
+<div class="card">
+<div class="card-title"><span class="card-title-left">供应商面试排名</span></div>
+<div class="chart-box medium"><canvas id="intvSupplierChart"></canvas></div>
+</div>
+</section>
+<!-- ==================== 离职 ==================== -->
+<section class="tab-panel" id="panel-resign">
+<!-- 离职KPI -->
+<div class="kpi-row" id="resignKPI" style="grid-template-columns:repeat(3,1fr)"></div>
+<!-- 离职原因 -->
+<div class="chart-row">
+<div class="card">
+<div class="card-title"><span class="card-title-left">离职原因分布</span></div>
+<div class="chart-box short"><canvas id="resignReasonChart"></canvas></div>
+</div>
+<div class="card">
+<div class="card-title"><span class="card-title-left">离职工种分布</span></div>
+<div class="chart-box short"><canvas id="resignJobChart"></canvas></div>
+</div>
+</div>
+<!-- 供应商离职排名 -->
+<div class="card">
+<div class="card-title"><span class="card-title-left">供应商离职排名</span></div>
+<div class="chart-box medium"><canvas id="resignSupplierChart"></canvas></div>
+</div>
+<!-- 离职明细表 -->
+<div class="card">
+<div class="card-title"><span class="card-title-left">离职明细</span></div>
+<div class="table-scroll" id="resignDetail"></div>
+</div>
+</section>
 <!-- ==================== 指标说明（动态渲染） ==================== -->
 <section class="tab-panel" id="panel-reference">
 <div class="card" id="referenceContent"></div>
@@ -344,6 +391,9 @@ window.addEventListener('DOMContentLoaded',()=>{$('#mainApp').style.display='non
 </div>
 <div class="toast" id="toast"></div>
 <script>
+// 注册datalabels插件
+Chart.register(ChartDataLabels);
+Chart.defaults.plugins.datalabels.display = false;
 // ==================== DATA ====================
 const COLORS = {
   jm:'#3B82F6', cd:'#22C55E',
@@ -390,7 +440,7 @@ function showToast(msg,type='success'){
 let _renderedTabs = new Set();
 function switchTab(id){
   $$('.tab').forEach(t=>{t.classList.toggle('active',t.textContent.includes(
-    {overview:'概览',target:'目标',trend:'趋势',structure:'结构',reference:'指标说明'}[id]))});
+    {overview:'概览',target:'目标',trend:'趋势',structure:'结构',interview:'面试',resign:'离职',reference:'指标说明'}[id]))});
   $$('.tab-panel').forEach(p=>p.classList.remove('active'));
   $(`#panel-${id}`).classList.add('active');
   // 延迟渲染当前tab的图表（确保tab已visible，canvas有正确尺寸）
@@ -398,6 +448,8 @@ function switchTab(id){
     if(id==='overview'||id==='target') renderOverviewTab();
     else if(id==='trend') renderTrendTab();
     else if(id==='structure') renderStructureTab();
+    else if(id==='interview') renderInterviewTab();
+    else if(id==='resign') renderResignTab();
     else if(id==='reference') renderReference();
     // 目标面板的图表需要单独渲染
     if(id==='target'){ renderOverview7d(); renderOverviewTrend(); }
@@ -485,6 +537,10 @@ function renderOverview7d(){
     return true;
   });
   const last7=filtered;
+  if(!last7.length){
+    $('#overview7d').innerHTML='<div style="text-align:center;padding:20px;color:#94A3B8">所选日期范围内无数据</div>';
+    return;
+  }
   const dates=last7.map(d=>d.date);
   const showDaily=ov7dShowDaily;
   let html='<table class="dt"><thead><tr><th class="rh">区域</th><th>累计入职</th><th>累计离职</th><th>累计净增</th>';
@@ -563,6 +619,11 @@ function renderOverviewTrend(){
   });
   // 使用筛选后的数据（可能为空）
   const lastN=filtered;
+  if(!lastN.length){
+    if(ovTrendChart){ovTrendChart.destroy();ovTrendChart=null}
+    $('#ovTrendChart').getContext('2d').clearRect(0,0,9999,9999);
+    return;
+  }
   const labels=lastN.map(d=>d.date);
   const targetVal=parseInt($('#ovTargetLine').value)||55;
   // 日净增数据
@@ -587,7 +648,7 @@ function renderOverviewTrend(){
 }
 
 function renderOverview(){
-  renderOverviewKPI();renderSecondaryKPI();renderOverviewStructure();renderFunnel()
+  renderOverviewKPI();renderSecondaryKPI();renderOverviewStructure()
 }
 
 function renderSecondaryKPI(){
@@ -764,7 +825,13 @@ function renderJobPie(){
   jobPie=new Chart($('#jobPieChart'),{
     type:'doughnut',
     data:{labels:activeNames,datasets:[{data:activeJobs,backgroundColor:activeColors,borderWidth:2,borderColor:'#fff'}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:10},usePointStyle:true,padding:10,boxWidth:8}}},cutout:'55%'}
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{position:'bottom',labels:{font:{size:10},usePointStyle:true,padding:10,boxWidth:8}},
+        tooltip:{callbacks:{label:function(ctx){const t=ctx.dataset.data.reduce((a,b)=>a+b,0);return ctx.label+': '+ctx.parsed+'人 ('+(ctx.parsed/t*100).toFixed(1)+'%)'}}},
+        datalabels:{display:true,color:'#fff',font:{size:11,weight:'bold'},formatter:function(v,ctx){const t=ctx.dataset.data.reduce((a,b)=>a+b,0);return v+'人\\n'+(v/t*100).toFixed(1)+'%'}}
+      },
+      cutout:'55%'}
   })
 }
 
@@ -785,7 +852,7 @@ function renderSupplier(){
   supplierChart=new Chart(canvas,{
     type:'bar',
     data:{labels:names,datasets:[{data:vals,backgroundColor:bgColors,borderRadius:4,barThickness:Math.max(12,Math.min(24,Math.floor(h/names.length)))}]},
-    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:'#F1F5F9'},ticks:{font:{size:10}}},y:{grid:{display:false},ticks:{font:{size:11,weight:500}}}}}
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},datalabels:{display:true,anchor:'end',align:'end',color:'#334155',font:{size:10,weight:'bold'},formatter:function(v){return v+'人'}}},scales:{x:{grid:{color:'#F1F5F9'},ticks:{font:{size:10}}},y:{grid:{display:false},ticks:{font:{size:11,weight:500}}}}}
   })
 }
 
@@ -1025,6 +1092,30 @@ function parseExcelData(wb){
   COLORS.suppliers=topSuppliers.map((_,i)=>supplierPalette[i%supplierPalette.length]);
 
   const last7=daily.slice(-7);
+  // ===== 面试维度统计 =====
+  const intvChannels={},intvRegions={},intvSuppliers={};
+  intv.forEach(r=>{
+    const ch=String(r[7]||'').trim(),rg=String(r[13]||'').trim(),sp=String(r[6]||'').trim();
+    if(ch)intvChannels[ch]=(intvChannels[ch]||0)+1;
+    if(rg)intvRegions[rg]=(intvRegions[rg]||0)+1;
+    if(sp)intvSuppliers[sp]=(intvSuppliers[sp]||0)+1;
+  });
+  // ===== 离职维度统计 =====
+  const resignReasons={},resignJobs={},resignSuppliers={};
+  const resignDetails=[];
+  let resignSettled=0;
+  leave.forEach(r=>{
+    const reason=String(r[9]||'').trim(),job=String(r[3]||'').trim(),sp=String(r[5]||'').trim();
+    const region=String(r[13]||'').trim(),settled=String(r[11]||'').trim();
+    if(reason)resignReasons[reason]=(resignReasons[reason]||0)+1;
+    if(job)resignJobs[job]=(resignJobs[job]||0)+1;
+    if(sp)resignSuppliers[sp]=(resignSuppliers[sp]||0)+1;
+    if(settled==='是')resignSettled++;
+    const jd=excelSerialToDate(r[6]),ld=excelSerialToDate(r[7]);
+    resignDetails.push({name:String(r[1]||''),job,supplier:sp,
+      joinDate:jd?fmtDate(jd):'',leaveDate:ld?fmtDate(ld):'',
+      days:String(r[8]||''),reason,region});
+  });
   DATA={
     reportDate:fmtDate(today),
     periodStart:startDStr,
@@ -1042,7 +1133,9 @@ function parseExcelData(wb){
     monthly:{jmJoin:jmMonthlyJoin,jmLeave:jmMonthlyLeave,cdJoin:cdMonthlyJoin,cdLeave:cdMonthlyLeave},
     prevWeekActive:totalActive-(daily.slice(-7).reduce((s,d)=>s+d.jm_n+d.cd_n,0)),
     prevWeekJmActive:jmActive-(daily.slice(-7).reduce((s,d)=>s+d.jm_n,0)),
-    prevWeekCdActive:cdActive-(daily.slice(-7).reduce((s,d)=>s+d.cd_n,0))
+    prevWeekCdActive:cdActive-(daily.slice(-7).reduce((s,d)=>s+d.cd_n,0)),
+    interview:{channels:intvChannels,regions:intvRegions,suppliers:intvSuppliers},
+    resign:{total:leave.length,settled:resignSettled,reasons:resignReasons,jobs:resignJobs,suppliers:resignSuppliers,details:resignDetails}
   };
 
   DATA._isRealData=true;
@@ -1129,6 +1222,165 @@ function renderTrendTab(){
 function renderStructureTab(){
   // 结构tab有Chart.js图表，仅在tab可见时调用
   renderJobPie(); renderSupplier(); renderSkillTable();
+}
+
+// ==================== INTERVIEW TAB ====================
+let channelPieChart=null, intvRegionChart=null, intvSupplierChart=null;
+function renderInterviewTab(){
+  renderFunnel();
+  renderInterviewKPI();
+  renderChannelPie();
+  renderIntvRegionChart();
+  renderIntvSupplierChart();
+}
+function renderInterviewKPI(){
+  const s=DATA.snapshot||{};
+  const iv=DATA.interview||{};
+  const items=[
+    {label:'面试总人数',value:fmt(s.interviewTotal||0),icon:'ic-blue'},
+    {label:'通过人数',value:fmt(s.interviewPass||0),icon:'ic-green'},
+    {label:'通过率',value:(s.interviewTotal?(s.interviewPass/s.interviewTotal*100).toFixed(1):'0.0')+'%',icon:'ic-purple'},
+    {label:'报到率',value:(s.interviewPass?(s.reportCount/s.interviewPass*100).toFixed(1):'0.0')+'%',icon:'ic-amber'},
+  ];
+  let html='';
+  items.forEach(it=>{
+    html+=`<div class="kpi-card"><div class="kpi-label">${it.label}</div><div class="kpi-value">${it.value}</div></div>`
+  });
+  $('#interviewKPI').innerHTML=html;
+}
+function renderChannelPie(){
+  const iv=DATA.interview||{};
+  const ch=iv.channels||{};
+  const labels=Object.keys(ch); const vals=Object.values(ch);
+  if(!labels.length){if(channelPieChart){channelPieChart.destroy();channelPieChart=null}return}
+  if(channelPieChart)channelPieChart.destroy();
+  channelPieChart=new Chart($('#channelPieChart'),{
+    type:'doughnut',
+    data:{labels,datasets:[{data:vals,backgroundColor:['#3B82F6','#22C55E','#F59E0B','#8B5CF6','#EC4899'],borderWidth:2,borderColor:'#fff'}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'55%',
+      plugins:{legend:{position:'bottom',labels:{font:{size:10},usePointStyle:true,padding:8,boxWidth:8}},
+        datalabels:{display:true,color:'#fff',font:{size:11,weight:'bold'},formatter:function(v,ctx){const t=ctx.dataset.data.reduce((a,b)=>a+b,0);return v+'人\\n'+(v/t*100).toFixed(0)+'%'}}
+      }}
+  });
+}
+function renderIntvRegionChart(){
+  const iv=DATA.interview||{};
+  const rg=iv.regions||{};
+  const labels=Object.keys(rg); const vals=Object.values(rg);
+  if(!labels.length){if(intvRegionChart){intvRegionChart.destroy();intvRegionChart=null}return}
+  if(intvRegionChart)intvRegionChart.destroy();
+  const colors=labels.map(l=>'江门' in l||l.includes('江门')?'#3B82F6':'#22C55E');
+  intvRegionChart=new Chart($('#intvRegionChart'),{
+    type:'bar',
+    data:{labels,datasets:[{data:vals,backgroundColor:colors,borderRadius:6}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},datalabels:{display:true,anchor:'end',align:'top',color:'#334155',font:{size:12,weight:'bold'}}},
+      scales:{y:{grid:{color:'#F1F5F9'},ticks:{font:{size:10}}},x:{grid:{display:false},ticks:{font:{size:11,weight:500}}}}
+    }
+  });
+}
+function renderIntvSupplierChart(){
+  const iv=DATA.interview||{};
+  const sp=iv.suppliers||{};
+  const sorted=Object.entries(sp).sort((a,b)=>b[1]-a[1]).slice(0,15);
+  const labels=sorted.map(e=>e[0]); const vals=sorted.map(e=>e[1]);
+  if(!labels.length){if(intvSupplierChart){intvSupplierChart.destroy();intvSupplierChart=null}return}
+  if(intvSupplierChart)intvSupplierChart.destroy();
+  const h=Math.max(200,Math.min(400,labels.length*26));
+  const canvas=$('#intvSupplierChart');
+  canvas.parentElement.style.height=h+'px';
+  const palette=['#3B82F6','#22C55E','#F59E0B','#8B5CF6','#EC4899','#14B8A6','#F97316','#6366F1','#EF4444','#84CC16','#06B6D4','#D946EF','#0EA5E9','#A855F7','#F43F5E'];
+  intvSupplierChart=new Chart(canvas,{
+    type:'bar',
+    data:{labels,datasets:[{data:vals,backgroundColor:vals.map((_,i)=>palette[i%palette.length]),borderRadius:4}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},datalabels:{display:true,anchor:'end',align:'end',color:'#334155',font:{size:10,weight:'bold'},formatter:v=>v+'人'}},
+      scales:{x:{grid:{color:'#F1F5F9'},ticks:{font:{size:10}}},y:{grid:{display:false},ticks:{font:{size:11,weight:500}}}}
+    }
+  });
+}
+
+// ==================== RESIGN TAB ====================
+let resignReasonChart=null, resignJobChart=null, resignSupplierChart=null;
+function renderResignTab(){
+  renderResignKPI();
+  renderResignReasonChart();
+  renderResignJobChart();
+  renderResignSupplierChart();
+  renderResignDetail();
+}
+function renderResignKPI(){
+  const m=DATA.monthly||{};
+  const lv=DATA.resign||{};
+  const items=[
+    {label:'累计离职',value:fmt(lv.total||0),icon:'ic-red'},
+    {label:'本月离职',value:fmt(m.jmLeave+m.cdLeave||0),icon:'ic-amber'},
+    {label:'已结算',value:fmt(lv.settled||0)+'人',icon:'ic-green'},
+  ];
+  let html='';
+  items.forEach(it=>{
+    html+=`<div class="kpi-card"><div class="kpi-label">${it.label}</div><div class="kpi-value">${it.value}</div></div>`
+  });
+  $('#resignKPI').innerHTML=html;
+}
+function renderResignReasonChart(){
+  const lv=DATA.resign||{};
+  const reasons=lv.reasons||{};
+  const labels=Object.keys(reasons); const vals=Object.values(reasons);
+  if(!labels.length){if(resignReasonChart){resignReasonChart.destroy();resignReasonChart=null}return}
+  if(resignReasonChart)resignReasonChart.destroy();
+  const palette=['#EF4444','#F59E0B','#3B82F6','#8B5CF6','#EC4899','#14B8A6'];
+  resignReasonChart=new Chart($('#resignReasonChart'),{
+    type:'doughnut',
+    data:{labels,datasets:[{data:vals,backgroundColor:labels.map((_,i)=>palette[i%palette.length]),borderWidth:2,borderColor:'#fff'}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'55%',
+      plugins:{legend:{position:'bottom',labels:{font:{size:10},usePointStyle:true,padding:8,boxWidth:8}},
+        datalabels:{display:true,color:'#fff',font:{size:11,weight:'bold'},formatter:function(v,ctx){const t=ctx.dataset.data.reduce((a,b)=>a+b,0);return v+'人\\n'+(v/t*100).toFixed(0)+'%'}}
+      }}
+  });
+}
+function renderResignJobChart(){
+  const lv=DATA.resign||{};
+  const jobs=lv.jobs||{};
+  const labels=Object.keys(jobs); const vals=Object.values(jobs);
+  if(!labels.length){if(resignJobChart){resignJobChart.destroy();resignJobChart=null}return}
+  if(resignJobChart)resignJobChart.destroy();
+  resignJobChart=new Chart($('#resignJobChart'),{
+    type:'bar',
+    data:{labels,datasets:[{data:vals,backgroundColor:['#F59E0B','#3B82F6','#8B5CF6','#EC4899','#6B7280'],borderRadius:6}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},datalabels:{display:true,anchor:'end',align:'top',color:'#334155',font:{size:12,weight:'bold'}}},
+      scales:{y:{grid:{color:'#F1F5F9'},ticks:{font:{size:10},stepSize:1}},x:{grid:{display:false},ticks:{font:{size:11,weight:500}}}}
+    }
+  });
+}
+function renderResignSupplierChart(){
+  const lv=DATA.resign||{};
+  const sp=lv.suppliers||{};
+  const sorted=Object.entries(sp).sort((a,b)=>b[1]-a[1]);
+  const labels=sorted.map(e=>e[0]); const vals=sorted.map(e=>e[1]);
+  if(!labels.length){if(resignSupplierChart){resignSupplierChart.destroy();resignSupplierChart=null}return}
+  if(resignSupplierChart)resignSupplierChart.destroy();
+  const palette=['#EF4444','#F59E0B','#3B82F6','#8B5CF6','#EC4899','#14B8A6'];
+  resignSupplierChart=new Chart($('#resignSupplierChart'),{
+    type:'bar',
+    data:{labels,datasets:[{data:vals,backgroundColor:vals.map((_,i)=>palette[i%palette.length]),borderRadius:4}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},datalabels:{display:true,anchor:'end',align:'end',color:'#334155',font:{size:10,weight:'bold'},formatter:v=>v+'人'}},
+      scales:{x:{grid:{color:'#F1F5F9'},ticks:{font:{size:10},stepSize:1}},y:{grid:{display:false},ticks:{font:{size:11,weight:500}}}}
+    }
+  });
+}
+function renderResignDetail(){
+  const lv=DATA.resign||{};
+  const details=lv.details||[];
+  if(!details.length){$('#resignDetail').innerHTML='<div style="text-align:center;padding:20px;color:#94A3B8">暂无离职记录</div>';return}
+  let html='<table class="data-table"><thead><tr><th>姓名</th><th>工种</th><th>供应商</th><th>入职日期</th><th>离职日期</th><th>在职天数</th><th>离职原因</th><th>地区</th></tr></thead><tbody>';
+  details.forEach(r=>{
+    html+=`<tr><td>${r.name}</td><td>${r.job}</td><td>${r.supplier}</td><td>${r.joinDate}</td><td>${r.leaveDate}</td><td>${r.days}</td><td>${r.reason}</td><td>${r.region}</td></tr>`;
+  });
+  html+='</tbody></table>';
+  $('#resignDetail').innerHTML=html;
 }
 
 // ==================== REFERENCE（指标说明动态渲染） ====================
@@ -1249,8 +1501,10 @@ function renderAll(){
 }
 
 function destroyAllCharts(){
-  [ovTrendChart,trendChart,jobAreaChart,supplierChart].forEach(c=>{if(c){try{c.destroy()}catch(e){}}});
-  ovTrendChart=null;trendChart=null;jobAreaChart=null;supplierChart=null
+  [ovTrendChart,trendChart,jobAreaChart,supplierChart,jobPie,channelPieChart,intvRegionChart,intvSupplierChart,resignReasonChart,resignJobChart,resignSupplierChart].forEach(c=>{if(c){try{c.destroy()}catch(e){}}});
+  ovTrendChart=null;trendChart=null;jobAreaChart=null;supplierChart=null;jobPie=null;
+  channelPieChart=null;intvRegionChart=null;intvSupplierChart=null;
+  resignReasonChart=null;resignJobChart=null;resignSupplierChart=null;
 }
 function ensureDefaults(){
   if(!DATA.targets) DATA.targets={'江门':2500,'成都':900};
@@ -1260,9 +1514,12 @@ function ensureDefaults(){
   if(!DATA.prevWeekActive) DATA.prevWeekActive=0;
   if(!DATA.prevWeekJmActive) DATA.prevWeekJmActive=0;
   if(!DATA.prevWeekCdActive) DATA.prevWeekCdActive=0;
+  if(!DATA.interview) DATA.interview={channels:{},regions:{},suppliers:{}};
+  if(!DATA.resign) DATA.resign={total:0,settled:0,reasons:{},jobs:{},suppliers:{},details:[]};
 }
 function setupDatePickers(){
   if(!DATA.daily||!DATA.daily.length)return;
+  const today=new Date(); today.setHours(0,0,0,0);
   const lastDObj=DATA.daily[DATA.daily.length-1].dateObj;
   const lastDateFull=fmtDate(lastDObj);
   const firstDObj=DATA.daily[0].dateObj;
@@ -1273,9 +1530,13 @@ function setupDatePickers(){
   const mStr=fmtDate(monday);
   const el7d=$('#ov7dStartDate'); if(el7d){el7d.value=mStr;el7d.min=firstDateFull;el7d.max=lastDateFull}
   const el7dEnd=$('#ov7dEndDate'); if(el7dEnd){el7dEnd.value=lastDateFull;el7dEnd.min=firstDateFull;el7dEnd.max=lastDateFull}
-  const d30=new Date(lastDObj); d30.setDate(lastDObj.getDate()-29);
-  const d30Str=fmtDate(d30);
-  const elTr=$('#ovTrendStartDate'); if(elTr){elTr.value=d30Str;elTr.min=firstDateFull;elTr.max=lastDateFull}
+  const elTr=$('#ovTrendStartDate'); if(elTr){
+    // 默认当前月1号
+    const monthFirst=new Date(today.getFullYear(),today.getMonth(),1);
+    const monthFirstStr=fmtDate(monthFirst);
+    elTr.value=monthFirstStr>=firstDateFull?monthFirstStr:firstDateFull;
+    elTr.min=firstDateFull;elTr.max=lastDateFull
+  }
   const elTrEnd=$('#ovTrendEndDate'); if(elTrEnd){elTrEnd.value=lastDateFull;elTrEnd.min=firstDateFull;elTrEnd.max=lastDateFull}
 }
 function fmtDate(d){
