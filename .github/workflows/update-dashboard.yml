@@ -6,6 +6,7 @@ on:
   push:
     paths:
       - 'worker_dashboard.html'
+      - 'data/**'  # 监听data目录下的所有文件变更
     branches:
       - main
   
