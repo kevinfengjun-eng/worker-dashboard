@@ -30,12 +30,12 @@ def main():
     print(f"读取Excel: {EXCEL_FILE}")
     wb = openpyxl.load_workbook(EXCEL_FILE, data_only=True)
 
-    # 供应商名称
-    ws_sp = wb['供应商管理']
-    supplier_names = []
+    # 供应商名称（去重）
+    _raw_sp = []
     for row in ws_sp.iter_rows(min_row=2, max_row=ws_sp.max_row, values_only=True):
         if row[2]:
-            supplier_names.append(str(row[2]).strip())
+            _raw_sp.append(str(row[2]).strip())
+    supplier_names = list(dict.fromkeys(_raw_sp))
 
     # 在职清单
     ws_act = wb['在职清单']
@@ -127,7 +127,7 @@ def main():
             supplier_count[sp] = 1
             supplier_names.append(sp)
 
-    sorted_suppliers = sorted([n for n in supplier_names if supplier_count.get(n, 0) > 0], key=lambda n: supplier_count[n], reverse=True)
+    sorted_suppliers = sorted(list(set([n for n in supplier_names if supplier_count.get(n, 0) > 0])), key=lambda n: supplier_count[n], reverse=True)
     top_suppliers = sorted_suppliers[:15]
 
     # 入职/离职 按日期
@@ -202,6 +202,7 @@ def main():
         'periodStart': start_d.strftime('%Y-%m-%d'),
         '_isRealData': True,
         'targets': {'江门': 2500, '成都': 900},
+        'targetLine': 55,
         'skillDemand': {'大工': 450, '中工': 1500, '小工': 2000},
         'snapshot': {
             'totalActive': total_active, 'jmActive': jm_active, 'cdActive': cd_active,
