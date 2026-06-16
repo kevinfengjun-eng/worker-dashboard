@@ -2,17 +2,21 @@ name: 更新临时工看板
 
 # 触发条件
 on:
-  # 当data目录下的Excel文件变更时自动触发
+  # 当模板HTML变更时自动触发（重新构建）
   push:
     paths:
-      - 'data/*.xlsx'
-      - 'data/*.xls'
       - 'worker_dashboard.html'
     branches:
       - main
   
-  # 手动触发（用于强制重新构建）
+  # 手动触发（用于强制重新构建或数据更新后重新构建）
   workflow_dispatch:
+    inputs:
+      excel_file:
+        description: 'Excel文件路径（相对于仓库根目录）'
+        required: false
+        default: 'data/临时工管理台账02.xlsx'
+        type: string
 
 # 权限设置（允许Action提交代码）
 permissions:
@@ -27,7 +31,7 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # 获取完整历史，便于后续commit
+          fetch-depth: 0
       
       # Step 2: 设置Python环境
       - name: 设置Python
@@ -41,19 +45,26 @@ jobs:
           python -m pip install --upgrade pip
           pip install openpyxl
       
-      # Step 4: 查找最新的Excel文件
+      # Step 4: 查找Excel文件
       - name: 查找Excel文件
         id: find_excel
         run: |
-          # 查找data目录下最新的Excel文件
-          EXCEL_FILE=$(find data -name "*.xlsx" -o -name "*.xls" | head -1)
-          if [ -z "$EXCEL_FILE" ]; then
-            echo "未找到Excel文件，跳过构建"
-            echo "should_build=false" >> $GITHUB_OUTPUT
-          else
-            echo "找到Excel文件: $EXCEL_FILE"
-            echo "excel_file=$EXCEL_FILE" >> $GITHUB_OUTPUT
+          # 优先使用手动触发时指定的文件
+          if [ -n "${{ inputs.excel_file }}" ] && [ -f "${{ inputs.excel_file }}" ]; then
+            echo "使用指定文件: ${{ inputs.excel_file }}"
+            echo "excel_file=${{ inputs.excel_file }}" >> $GITHUB_OUTPUT
             echo "should_build=true" >> $GITHUB_OUTPUT
+          else
+            # 自动查找data目录下的Excel文件
+            EXCEL_FILE=$(find data -name "*.xlsx" -o -name "*.xls" 2>/dev/null | head -1)
+            if [ -z "$EXCEL_FILE" ]; then
+              echo "未找到Excel文件，跳过构建"
+              echo "should_build=false" >> $GITHUB_OUTPUT
+            else
+              echo "找到Excel文件: $EXCEL_FILE"
+              echo "excel_file=$EXCEL_FILE" >> $GITHUB_OUTPUT
+              echo "should_build=true" >> $GITHUB_OUTPUT
+            fi
           fi
       
       # Step 5: 生成嵌入版HTML
@@ -61,16 +72,30 @@ jobs:
         if: steps.find_excel.outputs.should_build == 'true'
         run: |
           python generate_embedded.py "${{ steps.find_excel.outputs.excel_file }}" index.html
+        continue-on-error: true  # 如果生成失败，继续流程（不阻断）
       
-      # Step 6: 提交并更新GitHub Pages
-      - name: 提交更新
+      # Step 6: 检查生成是否成功
+      - name: 检查生成结果
         if: steps.find_excel.outputs.should_build == 'true'
+        id: check_result
+        run: |
+          if [ -f "index.html" ]; then
+            echo "生成成功: index.html"
+            echo "success=true" >> $GITHUB_OUTPUT
+          else
+            echo "生成失败，index.html 不存在"
+            echo "success=false" >> $GITHUB_OUTPUT
+          fi
+      
+      # Step 7: 提交并更新GitHub Pages
+      - name: 提交更新
+        if: steps.find_excel.outputs.should_build == 'true' && steps.check_result.outputs.success == 'true'
         run: |
           git config user.name "GitHub Action"
           git config user.email "action@github.com"
           
           # 检查是否有变更
-          if git diff --quiet index.html; then
+          if git diff --quiet index.html 2>/dev/null; then
             echo "无变更，跳过提交"
           else
             git add index.html
@@ -80,12 +105,23 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
-      # Step 7: 等待GitHub Pages构建（提示信息）
+      # Step 8: 构建完成提示
       - name: 构建完成
-        if: steps.find_excel.outputs.should_build == 'true'
+        if: steps.find_excel.outputs.should_build == 'true' && steps.check_result.outputs.success == 'true'
         run: |
           echo "=========================================="
           echo "看板已更新!"
           echo "GitHub Pages将在1-2分钟内完成构建"
           echo "访问链接: https://kevinfengjun-eng.github.io/worker-dashboard/"
+          echo "=========================================="
+      
+      # Step 9: 跳过构建提示
+      - name: 跳过构建
+        if: steps.find_excel.outputs.should_build == 'false'
+        run: |
+          echo "=========================================="
+          echo "跳过构建: 未找到Excel文件"
+          echo "如需更新数据，请:"
+          echo "  1. 通过GitHub网页界面上传Excel文件到 /data 目录"
+          echo "  2. 或本地运行 ./update_and_deploy.sh"
           echo "=========================================="
