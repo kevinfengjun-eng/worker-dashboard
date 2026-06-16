@@ -288,7 +288,7 @@ window.addEventListener('DOMContentLoaded',()=>{$('#mainApp').style.display='non
 <span style="font-size:11px;color:#64748B">结束</span>
 <input type="date" class="target-date-input" id="ovTrendEndDate" oninput="renderOverviewTrend()"/>
 <span style="font-size:11px;color:#64748B;margin-left:10px">日目标线</span>
-<input class="target-line-input" id="ovTargetLine" onchange="renderOverviewTrend()" type="number" value="55"/>
+<input class="target-line-input" id="ovTargetLine" onchange="onTargetLineChange()" type="number" value="55"/>
 <span style="font-size:11px;color:#64748B">人</span>
 <span class="badge badge-editable">可调</span>
 </div>
@@ -625,7 +625,7 @@ function renderOverviewTrend(){
     return;
   }
   const labels=lastN.map(d=>d.date);
-  const targetVal=parseInt($('#ovTargetLine').value)||55;
+  const targetVal=DATA.targetLine||parseInt($('#ovTargetLine').value)||55;
   // 日净增数据
   const totalLine=lastN.map(d=>d.jm_n+d.cd_n);
   const jmLine=lastN.map(d=>d.jm_n);
@@ -729,7 +729,8 @@ function renderTargets(){
 }
 function onTargetChange(el){
   DATA.targets[el.dataset.region]=parseInt(el.value)||0;
-  renderTargets()
+  renderTargets();
+  saveDataToLocal()
 }
 
 // ==================== TREND CHART ====================
@@ -827,9 +828,10 @@ function renderJobPie(){
     data:{labels:activeNames,datasets:[{data:activeJobs,backgroundColor:activeColors,borderWidth:2,borderColor:'#fff'}]},
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{
-        legend:{position:'bottom',labels:{font:{size:10},usePointStyle:true,padding:10,boxWidth:8}},
-        tooltip:{callbacks:{label:function(ctx){const t=ctx.dataset.data.reduce((a,b)=>a+b,0);return ctx.label+': '+ctx.parsed+'人 ('+(ctx.parsed/t*100).toFixed(1)+'%)'}}},
-        datalabels:{display:true,color:'#fff',font:{size:11,weight:'bold'},formatter:function(v,ctx){const t=ctx.dataset.data.reduce((a,b)=>a+b,0);return v+'人\\n'+(v/t*100).toFixed(1)+'%'}}
+        legend:{position:'bottom',labels:{font:{size:11},usePointStyle:true,padding:10,boxWidth:8,
+          generateLabels:function(chart){const ds=chart.data.datasets[0];return chart.data.labels.map((l,i)=>({text:l+' '+ds.data[i]+'人',fillStyle:ds.backgroundColor[i],strokeStyle:'#fff',lineWidth:2,hidden:false,index:i}))}
+        }},
+        tooltip:{callbacks:{label:function(ctx){const t=ctx.dataset.data.reduce((a,b)=>a+b,0);return ctx.label+': '+ctx.parsed+'人 ('+(ctx.parsed/t*100).toFixed(1)+'%)'}}}
       },
       cutout:'55%'}
   })
@@ -838,7 +840,7 @@ function renderJobPie(){
 // ==================== SUPPLIER CHART ====================
 let supplierChart=null;
 function renderSupplier(){
-  const names=DATA.snapshot.topSuppliers||COLORS.supplierNames;
+  const names=[...new Set(DATA.snapshot.topSuppliers||COLORS.supplierNames)];
   const sd=DATA.snapshot.supplierCount||{};
   const vals=names.map(n=>sd[n]||0);
   // 动态颜色
@@ -902,7 +904,13 @@ function renderSkillTable(){
 }
 function onDemandChange(el){
   DATA.skillDemand[el.dataset.skill]=parseInt(el.value)||0;
-  renderSkillTable()
+  renderSkillTable();
+  saveDataToLocal()
+}
+function onTargetLineChange(){
+  DATA.targetLine=parseInt($('#ovTargetLine').value)||55;
+  saveDataToLocal();
+  renderOverviewTrend()
 }
 
 // ==================== EXCEL PARSING ====================
@@ -954,10 +962,11 @@ function parseExcelData(wb){
   const skillNames=COLORS.skills;
 
   // ===== 从供应商管理Sheet提取真实供应商名称 =====
-  const realSupplierNames=[];
+  const _rawSp=[];
   supplierRows.slice(1).forEach(r=>{
-    if(r[2] && String(r[2]).trim()) realSupplierNames.push(String(r[2]).trim());
+    if(r[2] && String(r[2]).trim()) _rawSp.push(String(r[2]).trim());
   });
+  const realSupplierNames=[...new Set(_rawSp)];
   if(!realSupplierNames.length) realSupplierNames.push('001','002','003');
 
   // ===== KPI统计 =====
@@ -1252,14 +1261,25 @@ function renderChannelPie(){
   const iv=DATA.interview||{};
   const ch=iv.channels||{};
   const labels=Object.keys(ch); const vals=Object.values(ch);
-  if(!labels.length){if(channelPieChart){channelPieChart.destroy();channelPieChart=null}return}
+  if(!labels.length){
+    if(channelPieChart){channelPieChart.destroy();channelPieChart=null}
+    const canvas=$('#channelPieChart');const box=canvas.parentElement;
+    const old=box.querySelector('.chart-no-data');if(old)old.remove();
+    const msg=document.createElement('div');msg.className='chart-no-data';
+    msg.style.cssText='position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#94A3B8;font-size:12px;flex-direction:column;gap:4px';
+    msg.innerHTML='<span>暂无渠道数据</span><span style="font-size:10px">请检查面试清单"渠道"列(H列)</span>';
+    box.style.position='relative';box.appendChild(msg);
+    return
+  }
   if(channelPieChart)channelPieChart.destroy();
   channelPieChart=new Chart($('#channelPieChart'),{
     type:'doughnut',
     data:{labels,datasets:[{data:vals,backgroundColor:['#3B82F6','#22C55E','#F59E0B','#8B5CF6','#EC4899'],borderWidth:2,borderColor:'#fff'}]},
     options:{responsive:true,maintainAspectRatio:false,cutout:'55%',
-      plugins:{legend:{position:'bottom',labels:{font:{size:10},usePointStyle:true,padding:8,boxWidth:8}},
-        datalabels:{display:true,color:'#fff',font:{size:11,weight:'bold'},formatter:function(v,ctx){const t=ctx.dataset.data.reduce((a,b)=>a+b,0);return v+'人\\n'+(v/t*100).toFixed(0)+'%'}}
+      plugins:{legend:{position:'bottom',labels:{font:{size:11},usePointStyle:true,padding:8,boxWidth:8,
+        generateLabels:function(chart){const ds=chart.data.datasets[0];return chart.data.labels.map((l,i)=>({text:l+' '+ds.data[i]+'人',fillStyle:ds.backgroundColor[i],strokeStyle:'#fff',lineWidth:2,hidden:false,index:i}))}
+      }},
+        tooltip:{callbacks:{label:function(ctx){const t=ctx.dataset.data.reduce((a,b)=>a+b,0);return ctx.label+': '+ctx.parsed+'人 ('+(ctx.parsed/t*100).toFixed(1)+'%)'}}}
       }}
   });
 }
@@ -1267,15 +1287,24 @@ function renderIntvRegionChart(){
   const iv=DATA.interview||{};
   const rg=iv.regions||{};
   const labels=Object.keys(rg); const vals=Object.values(rg);
-  if(!labels.length){if(intvRegionChart){intvRegionChart.destroy();intvRegionChart=null}return}
+  if(!labels.length){
+    if(intvRegionChart){intvRegionChart.destroy();intvRegionChart=null}
+    const canvas=$('#intvRegionChart');const box=canvas.parentElement;
+    const old=box.querySelector('.chart-no-data');if(old)old.remove();
+    const msg=document.createElement('div');msg.className='chart-no-data';
+    msg.style.cssText='position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#94A3B8;font-size:12px;flex-direction:column;gap:4px';
+    msg.innerHTML='<span>暂无地区面试数据</span><span style="font-size:10px">请检查面试清单"地区"列(N列)是否有数据</span>';
+    box.style.position='relative';box.appendChild(msg);
+    return
+  }
   if(intvRegionChart)intvRegionChart.destroy();
-  const colors=labels.map(l=>'江门' in l||l.includes('江门')?'#3B82F6':'#22C55E');
+  const colors=labels.map(l=>l.includes('江门')?'#3B82F6':'#22C55E');
   intvRegionChart=new Chart($('#intvRegionChart'),{
     type:'bar',
     data:{labels,datasets:[{data:vals,backgroundColor:colors,borderRadius:6}]},
     options:{responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{display:false},datalabels:{display:true,anchor:'end',align:'top',color:'#334155',font:{size:12,weight:'bold'}}},
-      scales:{y:{grid:{color:'#F1F5F9'},ticks:{font:{size:10}}},x:{grid:{display:false},ticks:{font:{size:11,weight:500}}}}
+      plugins:{legend:{display:false},datalabels:{display:true,anchor:'end',align:'top',color:'#334155',font:{size:12,weight:'bold'},formatter:v=>v+'人'}},
+      scales:{y:{grid:{color:'#F1F5F9'},ticks:{font:{size:10},stepSize:1},beginAtZero:true},x:{grid:{display:false},ticks:{font:{size:11,weight:500}}}}
     }
   });
 }
@@ -1284,18 +1313,29 @@ function renderIntvSupplierChart(){
   const sp=iv.suppliers||{};
   const sorted=Object.entries(sp).sort((a,b)=>b[1]-a[1]).slice(0,15);
   const labels=sorted.map(e=>e[0]); const vals=sorted.map(e=>e[1]);
-  if(!labels.length){if(intvSupplierChart){intvSupplierChart.destroy();intvSupplierChart=null}return}
+  if(!labels.length){
+    if(intvSupplierChart){intvSupplierChart.destroy();intvSupplierChart=null}
+    const canvas=$('#intvSupplierChart');const box=canvas.parentElement;
+    const old=box.querySelector('.chart-no-data');if(old)old.remove();
+    const msg=document.createElement('div');msg.className='chart-no-data';
+    msg.style.cssText='position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#94A3B8;font-size:12px;flex-direction:column;gap:4px';
+    msg.innerHTML='<span>暂无供应商面试数据</span><span style="font-size:10px">请检查面试清单"供应商"列(G列)是否有数据</span>';
+    box.style.position='relative';box.appendChild(msg);
+    return
+  }
   if(intvSupplierChart)intvSupplierChart.destroy();
   const h=Math.max(200,Math.min(400,labels.length*26));
   const canvas=$('#intvSupplierChart');
   canvas.parentElement.style.height=h+'px';
+  // 清除可能存在的no-data提示
+  const old=canvas.parentElement.querySelector('.chart-no-data');if(old)old.remove();
   const palette=['#3B82F6','#22C55E','#F59E0B','#8B5CF6','#EC4899','#14B8A6','#F97316','#6366F1','#EF4444','#84CC16','#06B6D4','#D946EF','#0EA5E9','#A855F7','#F43F5E'];
   intvSupplierChart=new Chart(canvas,{
     type:'bar',
     data:{labels,datasets:[{data:vals,backgroundColor:vals.map((_,i)=>palette[i%palette.length]),borderRadius:4}]},
     options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:false},datalabels:{display:true,anchor:'end',align:'end',color:'#334155',font:{size:10,weight:'bold'},formatter:v=>v+'人'}},
-      scales:{x:{grid:{color:'#F1F5F9'},ticks:{font:{size:10}}},y:{grid:{display:false},ticks:{font:{size:11,weight:500}}}}
+      scales:{x:{grid:{color:'#F1F5F9'},ticks:{font:{size:10}},beginAtZero:true},y:{grid:{display:false},ticks:{font:{size:11,weight:500}}}}
     }
   });
 }
@@ -1334,8 +1374,10 @@ function renderResignReasonChart(){
     type:'doughnut',
     data:{labels,datasets:[{data:vals,backgroundColor:labels.map((_,i)=>palette[i%palette.length]),borderWidth:2,borderColor:'#fff'}]},
     options:{responsive:true,maintainAspectRatio:false,cutout:'55%',
-      plugins:{legend:{position:'bottom',labels:{font:{size:10},usePointStyle:true,padding:8,boxWidth:8}},
-        datalabels:{display:true,color:'#fff',font:{size:11,weight:'bold'},formatter:function(v,ctx){const t=ctx.dataset.data.reduce((a,b)=>a+b,0);return v+'人\\n'+(v/t*100).toFixed(0)+'%'}}
+      plugins:{legend:{position:'bottom',labels:{font:{size:11},usePointStyle:true,padding:8,boxWidth:8,
+        generateLabels:function(chart){const ds=chart.data.datasets[0];return chart.data.labels.map((l,i)=>({text:l+' '+ds.data[i]+'人',fillStyle:ds.backgroundColor[i],strokeStyle:'#fff',lineWidth:2,hidden:false,index:i}))}
+      }},
+        tooltip:{callbacks:{label:function(ctx){const t=ctx.dataset.data.reduce((a,b)=>a+b,0);return ctx.label+': '+ctx.parsed+'人 ('+(ctx.parsed/t*100).toFixed(1)+'%)'}}}
       }}
   });
 }
@@ -1516,6 +1558,7 @@ function ensureDefaults(){
   if(!DATA.prevWeekCdActive) DATA.prevWeekCdActive=0;
   if(!DATA.interview) DATA.interview={channels:{},regions:{},suppliers:{}};
   if(!DATA.resign) DATA.resign={total:0,settled:0,reasons:{},jobs:{},suppliers:{},details:[]};
+  if(!DATA.targetLine) DATA.targetLine=55;
 }
 function setupDatePickers(){
   if(!DATA.daily||!DATA.daily.length)return;
@@ -1538,6 +1581,7 @@ function setupDatePickers(){
     elTr.min=firstDateFull;elTr.max=lastDateFull
   }
   const elTrEnd=$('#ovTrendEndDate'); if(elTrEnd){elTrEnd.value=lastDateFull;elTrEnd.min=firstDateFull;elTrEnd.max=lastDateFull}
+  const elTL=$('#ovTargetLine'); if(elTL && DATA.targetLine){elTL.value=DATA.targetLine}
 }
 function fmtDate(d){
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')
