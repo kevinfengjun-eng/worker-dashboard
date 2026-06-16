@@ -101,6 +101,8 @@ jobs:
           else
             git add index.html
             git commit -m "自动更新看板: $(date '+%Y-%m-%d %H:%M')"
+            # 先拉取最新变更（避免non-fast-forward冲突）
+            git pull --rebase origin main
             git push
           fi
         env:
