@@ -56,8 +56,15 @@ def main():
     for row in ws_intv.iter_rows(min_row=2, max_row=ws_intv.max_row, values_only=True):
         if row[0]:
             intv_data.append({
+                'date': str(row[1] or '').strip(),
+                'name': str(row[2] or '').strip(),
+                'job': str(row[4] or '').strip(),
+                'skill': str(row[5] or '').strip(),
+                'supplier': str(row[6] or '').strip(),
+                'channel': str(row[7] or '').strip(),
                 'result': str(row[8] or '').strip(),
                 'reported': str(row[9] or '').strip(),
+                'region': str(row[13] or '').strip(),
             })
 
     # 离职清单
@@ -66,8 +73,16 @@ def main():
     for row in ws_lv.iter_rows(min_row=2, max_row=ws_lv.max_row, values_only=True):
         if row[0]:
             leave_data.append({
+                'name': str(row[1] or '').strip(),
                 'job': str(row[3] or '').strip(),
+                'skill': str(row[4] or '').strip(),
+                'supplier': str(row[5] or '').strip(),
+                'join_date': row[6],
                 'leave_date': row[7],
+                'days': str(row[8] or '').strip(),
+                'reason': str(row[9] or '').strip(),
+                'reason_detail': str(row[10] or '').strip(),
+                'settled': str(row[11] or '').strip(),
                 'region': str(row[13] or '').strip(),
             })
 
@@ -210,6 +225,51 @@ def main():
         'prevWeekJmActive': jm_active - sum(d['jm_n'] for d in last7),
         'prevWeekCdActive': cd_active - sum(d['cd_n'] for d in last7),
         'daily': daily,
+        # 面试数据
+        'interview': {
+            'channels': dict(sorted(
+                {ch: sum(1 for r in intv_data if r['channel'] == ch) for ch in set(r['channel'] for r in intv_data if r['channel'])}.items(),
+                key=lambda x: -x[1]
+            )),
+            'regions': dict(sorted(
+                {rg: sum(1 for r in intv_data if r['region'] == rg) for rg in set(r['region'] for r in intv_data if r['region'])}.items(),
+                key=lambda x: -x[1]
+            )),
+            'suppliers': dict(sorted(
+                {sp: sum(1 for r in intv_data if r['supplier'] == sp) for sp in set(r['supplier'] for r in intv_data if r['supplier'])}.items(),
+                key=lambda x: -x[1]
+            )),
+        },
+        # 离职数据
+        'resign': {
+            'total': len([r for r in leave_data if r['region']]),
+            'settled': sum(1 for r in leave_data if r['settled'] == '是'),
+            'reasons': dict(sorted(
+                {rs: sum(1 for r in leave_data if r['reason'] == rs) for rs in set(r['reason'] for r in leave_data if r['reason'])}.items(),
+                key=lambda x: -x[1]
+            )),
+            'jobs': dict(sorted(
+                {j: sum(1 for r in leave_data if r['job'] == j) for j in set(r['job'] for r in leave_data if r['job'])}.items(),
+                key=lambda x: -x[1]
+            )),
+            'suppliers': dict(sorted(
+                {sp: sum(1 for r in leave_data if r['supplier'] == sp) for sp in set(r['supplier'] for r in leave_data if r['supplier'])}.items(),
+                key=lambda x: -x[1]
+            )),
+            'details': [
+                {
+                    'name': r['name'],
+                    'job': r['job'],
+                    'supplier': r['supplier'],
+                    'joinDate': str(to_date(r['join_date']).strftime('%Y-%m-%d')) if to_date(r['join_date']) else '',
+                    'leaveDate': str(to_date(r['leave_date']).strftime('%Y-%m-%d')) if to_date(r['leave_date']) else '',
+                    'days': r['days'],
+                    'reason': r['reason'],
+                    'region': r['region'],
+                }
+                for r in leave_data if r['region']
+            ],
+        },
     }
 
     # 读取模板HTML
@@ -227,6 +287,17 @@ function initWithEmbeddedData(){{
   destroyAllCharts();
   if(EMBEDDED_DATA.daily){{EMBEDDED_DATA.daily.forEach(d=>{{if(d.dateObj_ts)d.dateObj=new Date(d.dateObj_ts);delete d.dateObj_ts}})}};
   Object.assign(DATA, JSON.parse(JSON.stringify(EMBEDDED_DATA)));
+  // 重建dateObj（JSON.stringify会把Date变成ISO字符串）
+  DATA.daily.forEach(d=>{{
+    if(d.dateObj && typeof d.dateObj==='string'){{
+      d.dateObj=new Date(d.dateObj);
+    }} else if(!d.dateObj && d.date){{
+      const parts=d.date.split('-');
+      if(parts.length===2) d.dateObj=new Date(2026,parseInt(parts[0])-1,parseInt(parts[1]));
+      else if(parts.length===3) d.dateObj=new Date(d.date);
+    }}
+    if(!(d.dateObj instanceof Date)||isNaN(d.dateObj.getTime())) d.dateObj=new Date();
+  }});
   DATA._isRealData=true;
   if(DATA.snapshot.topSuppliers){{COLORS.supplierNames=DATA.snapshot.topSuppliers;const p=['#3B82F6','#22C55E','#F59E0B','#8B5CF6','#EC4899','#14B8A6','#F97316','#6366F1','#EF4444','#84CC16','#06B6D4','#D946EF','#0EA5E9','#A855F7','#F43F5E'];COLORS.suppliers=DATA.snapshot.topSuppliers.map((_,i)=>p[i%p.length])}};
   ensureDefaults();
