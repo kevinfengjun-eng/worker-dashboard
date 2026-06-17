@@ -178,6 +178,11 @@ table.dt .tot{background:#EFF6FF;font-weight:600}
 }
 </style>
 <script>
+// ==================== UTILS (必须在登录代码前定义) ====================
+const $=s=>document.querySelector(s);
+const $$=s=>document.querySelectorAll(s);
+function fmt(n){return n==null?'-':n.toLocaleString()}
+
 // ===== 登录鉴权 =====
 const ACCOUNTS={admin:{pass:'hyms2026',role:'admin'},'111':{pass:'111',role:'viewer'}};
 let CURRENT_ROLE='';
@@ -409,9 +414,6 @@ const COLORS = {
 let DATA = {};
 
 // ==================== UTILS ====================
-const $=s=>document.querySelector(s);
-const $$=s=>document.querySelectorAll(s);
-function fmt(n){return n==null?'-':n.toLocaleString()}
 function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v))}
 // 统一日期全格式：始终从dateObj生成YYYY-MM-DD，避免硬编码年份
 function getFullDate(d){
