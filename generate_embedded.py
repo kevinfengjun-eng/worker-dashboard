@@ -31,6 +31,7 @@ def main():
     wb = openpyxl.load_workbook(EXCEL_FILE, data_only=True)
 
     # 供应商名称（去重）
+    ws_sp = wb['供应商管理']
     _raw_sp = []
     for row in ws_sp.iter_rows(min_row=2, max_row=ws_sp.max_row, values_only=True):
         if row[2]:
@@ -308,9 +309,10 @@ function initWithEmbeddedData(){{
   renderOverviewTab();_renderedTabs.add('overview');
 }}
 
-function doLogin(){{CURRENT_ROLE='viewer';$('#loginOverlay').style.display='none';$('#mainApp').style.display='block';applyRoleRestriction();initWithEmbeddedData()}}
+// 嵌入版自动跳过登录
+function doLogin(){{CURRENT_ROLE='viewer';document.getElementById('loginOverlay').style.display='none';document.getElementById('mainApp').style.display='block';applyRoleRestriction();initWithEmbeddedData()}}
 
-window.addEventListener('DOMContentLoaded',function(){{setTimeout(function(){{$('#loginOverlay').style.display='none';$('#mainApp').style.display='block';applyRoleRestriction();initWithEmbeddedData()}},100)}});
+window.addEventListener('DOMContentLoaded',function(){{doLogin()}});
 '''
 
     # 替换模板中的DATA声明
